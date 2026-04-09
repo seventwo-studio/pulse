@@ -8,6 +8,9 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use client::buffer::OfflineBuffer;
 use client::http::PulseClient;
 use core::primitives::Author;
 
@@ -67,8 +70,21 @@ enum Commands {
         a: String,
         b: String,
     },
+    /// Transfer repository to another Pulse server
+    Transfer {
+        /// Target server URL (e.g. https://pulse.example.com)
+        target: String,
+        /// Source server URL (defaults to PULSE_URL or localhost:3000)
+        #[arg(long)]
+        source: Option<String>,
+    },
     /// Show repository status
     Status,
+    /// Offline commit queue
+    Queue {
+        #[command(subcommand)]
+        action: QueueAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -107,6 +123,14 @@ enum WorkspaceAction {
     Abandon {
         id: String,
     },
+}
+
+#[derive(Subcommand)]
+enum QueueAction {
+    /// Show buffered commit count
+    Status,
+    /// Force replay buffered commits to the server
+    Drain,
 }
 
 // ---------------------------------------------------------------------------
@@ -287,6 +311,66 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
+        Commands::Queue { action } => {
+            let buffer_path = OfflineBuffer::default_path()?;
+            let buffer = OfflineBuffer::new(buffer_path);
+
+            match action {
+                QueueAction::Status => {
+                    let count = buffer.len()?;
+                    if count == 0 {
+                        println!("Offline queue is empty.");
+                    } else {
+                        println!("Offline queue: {count} buffered commit(s).");
+                    }
+                }
+                QueueAction::Drain => {
+                    let entries = buffer.drain()?;
+                    if entries.is_empty() {
+                        println!("Nothing to replay.");
+                        return Ok(());
+                    }
+
+                    let client = PulseClient::new(&default_url());
+                    println!("Replaying {} buffered commit(s)...", entries.len());
+
+                    for (i, entry) in entries.iter().enumerate() {
+                        let files: HashMap<String, Vec<u8>> = entry
+                            .files
+                            .iter()
+                            .map(|(path, b64)| {
+                                let bytes = STANDARD.decode(b64).unwrap_or_default();
+                                (path.clone(), bytes)
+                            })
+                            .collect();
+
+                        match client
+                            .commit(&entry.workspace_id, files, &entry.message, &entry.author)
+                            .await
+                        {
+                            Ok(resp) => {
+                                println!(
+                                    "  [{}/{}] {} committed as {}",
+                                    i + 1,
+                                    entries.len(),
+                                    entry.message,
+                                    short_hash(&resp.changeset.id),
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "  [{}/{}] {} failed: {e}",
+                                    i + 1,
+                                    entries.len(),
+                                    entry.message,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Commands::Diff { a, b } => {
             let client = PulseClient::new(&default_url());
             let diff = client.diff(&a, &b).await?;
@@ -302,6 +386,23 @@ async fn main() -> anyhow::Result<()> {
                 }
                 for path in &diff.modified {
                     println!("~ modified: {path}");
+                }
+            }
+        }
+
+        Commands::Transfer { target, source } => {
+            let source_url = source.unwrap_or_else(default_url);
+            let client = PulseClient::new(&source_url);
+            let result = client.transfer(&target).await?;
+            println!("Transfer complete.");
+            println!("  target:     {}", result.target_url);
+            println!("  blobs:      {}", result.exported.blobs);
+            println!("  snapshots:  {}", result.exported.snapshots);
+            println!("  changesets: {}", result.exported.changesets);
+            println!("  workspaces: {}", result.exported.workspaces);
+            if let Some(imported) = result.import_result.get("imported") {
+                if let Some(trunk_set) = imported.get("trunk_set").and_then(|v| v.as_bool()) {
+                    println!("  trunk set:  {}", trunk_set);
                 }
             }
         }

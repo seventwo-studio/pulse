@@ -271,6 +271,11 @@ impl StorageEngine {
         self.persist_blob(blob)
     }
 
+    /// Iterate over all stored blobs.
+    pub fn list_blobs(&self) -> impl Iterator<Item = &Blob> {
+        self.blobs.values()
+    }
+
     /// Look up a blob by its content hash.
     pub fn get_blob(&self, hash: &Hash) -> Result<&Blob, StorageError> {
         self.blobs
@@ -289,6 +294,11 @@ impl StorageEngine {
         Ok(id)
     }
 
+    /// Iterate over all stored snapshots.
+    pub fn list_snapshots(&self) -> impl Iterator<Item = &Snapshot> {
+        self.snapshots.values()
+    }
+
     /// Look up a snapshot by id.
     pub fn get_snapshot(&self, id: &Hash) -> Result<&Snapshot, StorageError> {
         self.snapshots
@@ -305,6 +315,11 @@ impl StorageEngine {
         let id = changeset.id;
         self.changesets.insert(id, changeset.clone());
         Ok(id)
+    }
+
+    /// Iterate over all stored changesets.
+    pub fn list_changesets(&self) -> impl Iterator<Item = &Changeset> {
+        self.changesets.values()
     }
 
     /// Look up a changeset by id.
@@ -369,6 +384,18 @@ impl StorageEngine {
         fs::write(&tmp, changeset_id.to_string())?;
         fs::rename(&tmp, &path)?;
         Ok(())
+    }
+
+    // -- Pipeline access (for compaction) ------------------------------------
+
+    /// Borrow the pipeline (used by compaction).
+    pub(crate) fn pipeline(&self) -> &super::pipeline::Pipeline {
+        &self.pipeline
+    }
+
+    /// Mutably borrow the pipeline (used by compaction).
+    pub(crate) fn pipeline_mut(&mut self) -> &mut super::pipeline::Pipeline {
+        &mut self.pipeline
     }
 
     // -- Object queries ----------------------------------------------------

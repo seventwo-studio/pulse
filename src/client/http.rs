@@ -55,6 +55,21 @@ pub struct AbandonResponse {
     pub workspace: Workspace,
 }
 
+#[derive(Deserialize)]
+pub struct TransferResponse {
+    pub target_url: String,
+    pub exported: TransferExportStats,
+    pub import_result: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+pub struct TransferExportStats {
+    pub blobs: usize,
+    pub snapshots: usize,
+    pub changesets: usize,
+    pub workspaces: usize,
+}
+
 /// Standard error envelope returned by the server.
 #[derive(Deserialize)]
 struct ErrorBody {
@@ -302,6 +317,23 @@ impl PulseClient {
         let resp = self
             .http
             .get(format!("{}/diff/{}/{}", self.base_url, a, b))
+            .send()
+            .await?;
+        let resp = Self::check(resp).await?;
+        Ok(resp.json().await?)
+    }
+
+    // -- Transfer -------------------------------------------------------------
+
+    /// POST /repo/transfer
+    ///
+    /// Initiates a one-time push transfer from this server to a target.
+    pub async fn transfer(&self, target_url: &str) -> anyhow::Result<TransferResponse> {
+        let body = serde_json::json!({ "target_url": target_url });
+        let resp = self
+            .http
+            .post(format!("{}/repo/transfer", self.base_url))
+            .json(&body)
             .send()
             .await?;
         let resp = Self::check(resp).await?;

@@ -53,6 +53,19 @@ pub fn build_router(state: AppState) -> Router {
             axum::routing::post(routes::workspaces::create)
                 .get(routes::workspaces::list),
         )
+        // Transfer
+        .route(
+            "/repo/export",
+            axum::routing::post(routes::transfer::export),
+        )
+        .route(
+            "/repo/import",
+            axum::routing::post(routes::transfer::import),
+        )
+        .route(
+            "/repo/transfer",
+            axum::routing::post(routes::transfer::transfer),
+        )
         // Diff & Files
         .route(
             "/diff/{a}/{b}",

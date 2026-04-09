@@ -188,6 +188,17 @@ impl Pipeline {
     pub fn index_mut(&mut self) -> &mut Index {
         &mut self.index
     }
+
+    /// Borrow the underlying append-only log.
+    pub fn log(&self) -> &AppendLog {
+        &self.log
+    }
+
+    /// Replace the pipeline's log and index (used by compaction).
+    pub fn replace(&mut self, log: AppendLog, index: Index) {
+        self.log = log;
+        self.index = index;
+    }
 }
 
 // ---------------------------------------------------------------------------

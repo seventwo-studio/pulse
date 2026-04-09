@@ -55,6 +55,16 @@ impl AppendLog {
         })
     }
 
+    /// Return the file path of this log.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Return the current size of the log in bytes (position of next write).
+    pub fn size(&self) -> u64 {
+        self.write_offset
+    }
+
     /// Append payload, return offset where entry starts.
     /// Writes length + payload + checksum, then fsyncs.
     pub fn append(&mut self, payload: &[u8]) -> Result<u64, LogError> {
@@ -130,12 +140,19 @@ impl AppendLog {
 
     /// Iterate all valid entries: yields (offset, payload).
     pub fn iter(&self) -> LogIterator {
-        // Open a fresh file handle for iteration
+        self.iter_from(0)
+    }
+
+    /// Iterate valid entries starting from the given byte offset.
+    pub fn iter_from(&self, offset: u64) -> LogIterator {
         let file = File::open(&self.path).expect("failed to open log file for iteration");
-        let reader = BufReader::new(file);
+        let mut reader = BufReader::new(file);
+        if offset > 0 {
+            reader.seek(SeekFrom::Start(offset)).expect("failed to seek log file for iteration");
+        }
         LogIterator {
             reader,
-            offset: 0,
+            offset,
             file_len: self.write_offset,
         }
     }
