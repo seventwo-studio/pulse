@@ -1,76 +1,39 @@
 use std::collections::HashMap;
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::core::diff::DiffResult;
 use crate::core::primitives::*;
 
 // ---------------------------------------------------------------------------
-// Response types (mirror what the server returns)
+// Sync bundle — the unit of exchange between client and server
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
-pub struct InitResponse {
-    pub changeset_id: Hash,
-    pub snapshot_id: Hash,
-}
-
-#[derive(Deserialize)]
-pub struct StatusResponse {
+/// A bundle of objects exchanged during push/pull.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncBundle {
+    /// Trunk changeset hash.
     pub trunk: Hash,
-    pub active_workspaces: usize,
+    /// Changesets in topological order (oldest first).
+    pub changesets: Vec<Changeset>,
+    /// Snapshots referenced by the changesets.
+    pub snapshots: Vec<Snapshot>,
+    /// Workspaces.
+    pub workspaces: Vec<Workspace>,
+    /// File content keyed by blob hash (hex) → base64-encoded bytes.
+    pub files: HashMap<String, String>,
 }
 
-#[derive(Deserialize)]
-pub struct StoreResponse {
-    pub hash: Hash,
-    pub chunks: Vec<Hash>,
-    pub new_chunks: usize,
-    pub reused_chunks: usize,
+#[derive(Debug, Deserialize)]
+pub struct SyncPushResponse {
+    #[allow(dead_code)]
+    pub trunk: Hash,
 }
 
-#[derive(Deserialize)]
-pub struct CreateWorkspaceResponse {
-    pub workspace: Workspace,
-    pub overlaps: Vec<serde_json::Value>,
-}
+// ---------------------------------------------------------------------------
+// Error envelope
+// ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
-pub struct CommitResponse {
-    pub changeset: Changeset,
-    pub stats: CommitStats,
-}
-
-#[derive(Deserialize)]
-pub struct CommitStats {
-    pub new_chunks: usize,
-    pub reused_chunks: usize,
-}
-
-#[derive(Deserialize)]
-pub struct AbandonResponse {
-    pub workspace: Workspace,
-}
-
-#[derive(Deserialize)]
-pub struct TransferResponse {
-    pub target_url: String,
-    pub exported: TransferExportStats,
-    pub import_result: serde_json::Value,
-}
-
-#[derive(Deserialize)]
-pub struct TransferExportStats {
-    pub blobs: usize,
-    pub snapshots: usize,
-    pub changesets: usize,
-    pub workspaces: usize,
-}
-
-/// Standard error envelope returned by the server.
 #[derive(Deserialize)]
 struct ErrorBody {
     error: ErrorDetail,
@@ -98,9 +61,6 @@ impl PulseClient {
         }
     }
 
-    // -- helpers -------------------------------------------------------------
-
-    /// Check a response for error status and return a descriptive anyhow error.
     async fn check(resp: reqwest::Response) -> anyhow::Result<reqwest::Response> {
         if resp.status().is_success() {
             return Ok(resp);
@@ -113,245 +73,36 @@ impl PulseClient {
         anyhow::bail!("{}: {}", status, body);
     }
 
-    // -- Repo ----------------------------------------------------------------
+    // -- Sync ----------------------------------------------------------------
 
-    /// POST /repo/init
-    pub async fn init_repo(&self) -> anyhow::Result<InitResponse> {
+    /// Push a bundle of local objects to the remote server.
+    pub async fn sync_push(&self, bundle: &SyncBundle) -> anyhow::Result<SyncPushResponse> {
         let resp = self
             .http
-            .post(format!("{}/repo/init", self.base_url))
+            .post(format!("{}/sync/push", self.base_url))
+            .json(bundle)
             .send()
             .await?;
         let resp = Self::check(resp).await?;
         Ok(resp.json().await?)
     }
 
-    /// GET /repo/status
-    pub async fn status(&self) -> anyhow::Result<StatusResponse> {
-        let resp = self
-            .http
-            .get(format!("{}/repo/status", self.base_url))
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    // -- Trunk ---------------------------------------------------------------
-
-    /// GET /trunk
-    pub async fn trunk(&self) -> anyhow::Result<Changeset> {
-        let resp = self
-            .http
-            .get(format!("{}/trunk", self.base_url))
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    /// GET /trunk/log
-    pub async fn trunk_log(
+    /// Pull objects from the remote server.
+    /// `have_trunk` is our current trunk hash (or None if we have nothing).
+    pub async fn sync_pull(
         &self,
-        limit: Option<usize>,
-        author: Option<&str>,
-    ) -> anyhow::Result<Vec<Changeset>> {
-        let mut url = format!("{}/trunk/log", self.base_url);
-        let mut params = Vec::new();
-        if let Some(l) = limit {
-            params.push(format!("limit={l}"));
-        }
-        if let Some(a) = author {
-            params.push(format!("author={a}"));
-        }
-        if !params.is_empty() {
-            url.push('?');
-            url.push_str(&params.join("&"));
-        }
-        let resp = self.http.get(&url).send().await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    /// GET /trunk/snapshot
-    pub async fn trunk_snapshot(&self) -> anyhow::Result<Snapshot> {
-        let resp = self
-            .http
-            .get(format!("{}/trunk/snapshot", self.base_url))
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    // -- Workspaces ----------------------------------------------------------
-
-    /// POST /workspaces
-    pub async fn create_workspace(
-        &self,
-        intent: &str,
-        scope: &[String],
-        author: &Author,
-    ) -> anyhow::Result<CreateWorkspaceResponse> {
+        have_trunk: Option<&Hash>,
+    ) -> anyhow::Result<SyncBundle> {
         let body = serde_json::json!({
-            "intent": intent,
-            "scope": scope,
-            "author": author,
+            "have_trunk": have_trunk,
         });
         let resp = self
             .http
-            .post(format!("{}/workspaces", self.base_url))
+            .post(format!("{}/sync/pull", self.base_url))
             .json(&body)
             .send()
             .await?;
         let resp = Self::check(resp).await?;
         Ok(resp.json().await?)
-    }
-
-    /// GET /workspaces
-    pub async fn list_workspaces(&self, all: bool) -> anyhow::Result<Vec<Workspace>> {
-        let url = if all {
-            format!("{}/workspaces?all=true", self.base_url)
-        } else {
-            format!("{}/workspaces", self.base_url)
-        };
-        let resp = self.http.get(&url).send().await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    /// GET /workspaces/:id
-    pub async fn get_workspace(&self, id: &str) -> anyhow::Result<Workspace> {
-        let resp = self
-            .http
-            .get(format!("{}/workspaces/{}", self.base_url, id))
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    /// POST /workspaces/:id/commit
-    ///
-    /// File contents are base64-encoded before sending.
-    pub async fn commit(
-        &self,
-        workspace_id: &str,
-        files: HashMap<String, Vec<u8>>,
-        message: &str,
-        author: &Author,
-    ) -> anyhow::Result<CommitResponse> {
-        let encoded: HashMap<String, String> = files
-            .into_iter()
-            .map(|(path, bytes)| (path, STANDARD.encode(bytes)))
-            .collect();
-
-        let body = serde_json::json!({
-            "files": encoded,
-            "message": message,
-            "author": author,
-        });
-
-        let resp = self
-            .http
-            .post(format!(
-                "{}/workspaces/{}/commit",
-                self.base_url, workspace_id
-            ))
-            .json(&body)
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    /// POST /workspaces/:id/merge
-    ///
-    /// Returns the raw JSON value since the response shape varies between
-    /// success and conflict.
-    pub async fn merge(&self, workspace_id: &str) -> anyhow::Result<serde_json::Value> {
-        let resp = self
-            .http
-            .post(format!(
-                "{}/workspaces/{}/merge",
-                self.base_url, workspace_id
-            ))
-            .send()
-            .await?;
-
-        let status = resp.status();
-        let body: serde_json::Value = resp.json().await?;
-
-        if status.is_success() {
-            Ok(body)
-        } else if status == reqwest::StatusCode::CONFLICT {
-            // Return the conflict body as-is so the caller can inspect it.
-            Ok(body)
-        } else {
-            // Other error
-            let msg = body
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(|m| m.as_str())
-                .unwrap_or("unknown error");
-            anyhow::bail!("{}: {}", status, msg);
-        }
-    }
-
-    /// DELETE /workspaces/:id
-    pub async fn abandon_workspace(&self, id: &str) -> anyhow::Result<Workspace> {
-        let resp = self
-            .http
-            .delete(format!("{}/workspaces/{}", self.base_url, id))
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        let body: AbandonResponse = resp.json().await?;
-        Ok(body.workspace)
-    }
-
-    // -- Diff ----------------------------------------------------------------
-
-    /// GET /diff/:a/:b
-    pub async fn diff(&self, a: &str, b: &str) -> anyhow::Result<DiffResult> {
-        let resp = self
-            .http
-            .get(format!("{}/diff/{}/{}", self.base_url, a, b))
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    // -- Transfer -------------------------------------------------------------
-
-    /// POST /repo/transfer
-    ///
-    /// Initiates a one-time push transfer from this server to a target.
-    pub async fn transfer(&self, target_url: &str) -> anyhow::Result<TransferResponse> {
-        let body = serde_json::json!({ "target_url": target_url });
-        let resp = self
-            .http
-            .post(format!("{}/repo/transfer", self.base_url))
-            .json(&body)
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    // -- Files ---------------------------------------------------------------
-
-    /// GET /files/:path
-    ///
-    /// Returns the raw file bytes.
-    pub async fn get_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
-        let resp = self
-            .http
-            .get(format!("{}/files/{}", self.base_url, path))
-            .send()
-            .await?;
-        let resp = Self::check(resp).await?;
-        Ok(resp.bytes().await?.to_vec())
     }
 }
