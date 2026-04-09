@@ -1,0 +1,106 @@
+---
+---
+
+<section class="relative pt-32 pb-24 md:pt-48 md:pb-40 overflow-hidden">
+  <!-- Gradient orbs -->
+  <div class="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-flame/15 rounded-full blur-[120px] pointer-events-none"></div>
+  <div class="absolute top-[10%] right-[-15%] w-[50vw] h-[50vw] bg-magenta/12 rounded-full blur-[100px] pointer-events-none"></div>
+  <div class="absolute bottom-[-10%] left-[30%] w-[40vw] h-[40vw] bg-indigo/10 rounded-full blur-[80px] pointer-events-none"></div>
+
+  <!-- Grid pattern overlay -->
+  <div class="absolute inset-0 opacity-[0.03]" style="background-image: linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px); background-size: 64px 64px;"></div>
+
+  <div class="relative max-w-7xl mx-auto px-6">
+    <div class="max-w-4xl">
+      <!-- Eyebrow -->
+      <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-magenta/30 bg-magenta/5 text-magenta text-sm font-medium mb-8 animate-fade-in">
+        <span class="w-1.5 h-1.5 rounded-full bg-magenta animate-pulse"></span>
+        Now open source
+      </div>
+
+      <!-- Heading -->
+      <h1 class="text-5xl sm:text-7xl md:text-8xl font-black tracking-tight leading-[0.9] mb-8 animate-fade-in-up">
+        Version control<br />
+        <span class="bg-gradient-to-r from-flame via-magenta to-indigo bg-clip-text text-transparent">without the Git.</span>
+      </h1>
+
+      <!-- Sub -->
+      <p class="text-xl md:text-2xl text-text-secondary max-w-2xl leading-relaxed mb-12 animate-fade-in-up animation-delay-100">
+        Pulse is AI-native version control that works offline, syncs transparently,
+        and treats agents as first-class authors. No branches. No staging area. No baggage.
+      </p>
+
+      <!-- CTAs -->
+      <div class="flex flex-wrap gap-4 animate-fade-in-up animation-delay-200">
+        <a
+          href="/docs/installation"
+          class="group relative px-8 py-4 rounded-2xl bg-gradient-to-r from-flame via-magenta to-indigo text-white font-bold text-lg overflow-hidden transition-transform hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <div class="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors"></div>
+          <span class="relative">Get started</span>
+        </a>
+        <a
+          href="https://github.com/seventwo-studio/pulse"
+          class="px-8 py-4 rounded-2xl border border-white/10 bg-white/5 font-bold text-lg hover:bg-white/10 transition-colors"
+        >
+          View on GitHub
+        </a>
+      </div>
+    </div>
+
+    <!-- Terminal preview -->
+    <div class="mt-16 md:mt-24 animate-fade-in-up animation-delay-300">
+      <div class="relative rounded-2xl border border-white/10 bg-surface-raised overflow-hidden shadow-2xl shadow-magenta/5">
+        <!-- Title bar -->
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5">
+          <div class="flex gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-white/10"></div>
+            <div class="w-3 h-3 rounded-full bg-white/10"></div>
+            <div class="w-3 h-3 rounded-full bg-white/10"></div>
+          </div>
+          <span class="text-xs text-text-secondary ml-2 font-mono">~/project</span>
+        </div>
+        <!-- Terminal content -->
+        <div class="p-6 font-mono text-sm leading-relaxed">
+          <div><span class="text-text-secondary">$</span> <span class="text-cyan">pulse</span> init --remote https://pulse.dev/my-project</div>
+          <div class="text-text-secondary mt-1">Initialized Pulse repository in .pulse/</div>
+          <div class="text-text-secondary">  changeset: <span class="text-flame">f4a1dfe1</span></div>
+          <div class="text-text-secondary">  remote:    https://pulse.dev/my-project</div>
+          <div class="mt-4"><span class="text-text-secondary">$</span> <span class="text-cyan">pulse</span> workspace create --intent <span class="text-magenta">"add auth system"</span></div>
+          <div class="text-text-secondary mt-1">Created workspace <span class="text-flame">ws-c348</span></div>
+          <div class="text-text-secondary">  intent: add auth system</div>
+          <div class="text-text-secondary">  base:   <span class="text-flame">f4a1dfe1</span></div>
+          <div class="text-text-secondary italic mt-1">(synced: pushed)</div>
+          <div class="mt-4"><span class="text-text-secondary">$</span> <span class="text-cyan">pulse</span> commit -m <span class="text-magenta">"implement JWT middleware"</span> -w ws-c348 src/auth.rs</div>
+          <div class="text-text-secondary mt-1">Committed <span class="text-flame">fc083972</span></div>
+          <div class="text-text-secondary">  new chunks: 3  reused chunks: 1</div>
+          <div class="text-text-secondary italic mt-1">(synced: pushed)</div>
+          <div class="mt-4"><span class="text-text-secondary">$</span> <span class="text-cyan">pulse</span> merge ws-c348</div>
+          <div class="text-text-secondary mt-1">Merged into trunk. Changeset: <span class="text-flame">68fe576d</span></div>
+          <div class="text-text-secondary italic">(synced: pushed)</div>
+          <div class="mt-3 inline-block w-2 h-5 bg-magenta/80 animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.8s ease-out both;
+  }
+  .animate-fade-in-up {
+    animation: fade-in-up 0.8s ease-out both;
+  }
+  .animation-delay-100 { animation-delay: 0.1s; }
+  .animation-delay-200 { animation-delay: 0.2s; }
+  .animation-delay-300 { animation-delay: 0.4s; }
+</style>

@@ -1,0 +1,70 @@
+---
+title: Sync
+description: How Pulse synchronizes state between local and remote.
+---
+
+Pulse is offline-first. Every command works on local `.pulse/` storage. Sync with a remote server is automatic and transparent.
+
+## Configuring a remote
+
+Set a remote when initializing:
+
+```bash
+pulse init --remote https://pulse.example.com/my-project
+```
+
+Or add one to an existing repo by editing `.pulse/config.json`:
+
+```json
+{
+  "remote": "https://pulse.example.com/my-project"
+}
+```
+
+## How auto-sync works
+
+When a remote is configured:
+
+1. **Before every command** — Pulse pulls new changesets from the remote
+2. **After every mutating command** — Pulse pushes local state to the remote
+
+Mutating commands: `init`, `workspace create`, `workspace abandon`, `commit`, `merge`.
+
+Sync messages appear on stderr:
+
+```
+(synced: pulled 3 changeset(s))
+(synced: pushed)
+```
+
+## Offline behavior
+
+If the remote is unreachable, sync failures are silently ignored. The command runs locally as normal. When connectivity returns, the next command syncs everything up.
+
+There's no special "offline mode" — Pulse is always offline-capable.
+
+## Clone behavior
+
+When you `pulse init --remote <url>` and the remote already has data, Pulse clones it:
+
+```bash
+pulse init --remote https://pulse.example.com/existing-project
+```
+
+```
+Initialized Pulse repository in .pulse/
+  changeset: f4a1dfe1
+  remote:    https://pulse.example.com/existing-project
+  cloned:    12 changeset(s) from remote
+```
+
+## Sync protocol
+
+The sync protocol exchanges **bundles** — JSON payloads containing:
+
+- Changesets (with pre-computed IDs)
+- Snapshots (with file maps)
+- File content (by blob hash, base64-encoded)
+- Workspaces
+
+Both sides use the same content-addressing algorithms (BLAKE3 hashing, structural chunking), so objects are interchangeable. The server stores client-computed objects verbatim.

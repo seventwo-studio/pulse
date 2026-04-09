@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("https://cdn.fontshare.com/wf/RVGPOTTBQ4WCDMSXLHGVPTXQ4Q3GMVDC/NFBP6SPFTDDXOIZ56QSNIR5GN7E3NFWN/WP6NHWGAQAYDSFKMNBZ7I2KG3HBUZRN2.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("https://cdn.fontshare.com/wf/RVGPOTTBQ4WCDMSXLHGVPTXQ4Q3GMVDC/S34KSPBHJ7TPHLUM3IZYZBBYTBNNTIXF/OXZEPKJXKGZB3NFVWBIWPG2BFXCVFQ7G.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("https://cdn.fontshare.com/wf/RVGPOTTBQ4WCDMSXLHGVPTXQ4Q3GMVDC/TSREOYXRDDIJ5V5RYM6PXNXLXGFSRFGS/KRSERHQRVNLRBAH4GCZRSP5VPWBKNJ3W.woff2")
+    format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@2.304/fonts/webfonts/JetBrainsMono-Regular.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "Satoshi", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-flame: #ff6b35;
+  --color-magenta: #e040fb;
+  --color-indigo: #536dfe;
+  --color-cyan: #00e5ff;
+  --color-surface: #0a0a0f;
+  --color-surface-raised: #14141f;
+  --color-surface-bright: #1e1e2e;
+  --color-text-primary: #f0f0f5;
+  --color-text-secondary: #9090a8;
+}

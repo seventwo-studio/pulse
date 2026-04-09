@@ -1,0 +1,63 @@
+---
+title: Storage Engine
+description: How Pulse stores data locally.
+---
+
+Pulse's local storage lives in a `.pulse/` directory at the repository root.
+
+## On-disk layout
+
+```
+.pulse/
+  config.json          # Remote URL and settings
+  data/
+    chunks.log         # Append-only log of compressed chunk data
+  meta/
+    blobs.log          # Blob definitions (hash + chunk list)
+    changesets.log     # Changeset JSON entries
+    snapshots.log      # Snapshot JSON entries
+    workspaces.log     # Workspace state (event-sourced)
+    trunk              # Current trunk changeset ID (hex string)
+```
+
+## Append-only logs
+
+All data is stored in append-only log files. Each entry is:
+
+```
+[4 bytes: payload length][payload bytes][4 bytes: CRC32 checksum]
+```
+
+This format provides:
+- **Crash recovery** — truncate partial writes on open
+- **Fast iteration** — sequential reads, no index needed for full scans
+- **Immutability** — entries are never modified, only appended
+
+## Structural chunking
+
+The chunker is language-aware. Instead of splitting at fixed byte boundaries, it splits at code boundaries:
+
+- Function/method declarations
+- Class/struct definitions
+- Import blocks
+- Top-level declarations
+- Closing braces at indent level 0
+
+This means editing a function only creates new chunks for that function — unchanged functions keep their existing chunk hashes.
+
+Fallback: files that don't look like source code use FastCDC (content-defined chunking) with a 4 KiB target size.
+
+## Compression
+
+Chunks are compressed with zstd at level 3 before storage. Decompression happens on read. The chunk index maps uncompressed content hashes to `(offset, length)` in the log file.
+
+## Compaction
+
+Over time, abandoned workspaces leave unreferenced chunks in the log. The compaction process:
+
+1. Walk all snapshots reachable from trunk
+2. Collect all referenced chunk hashes
+3. Copy referenced chunks to a new log
+4. Replace the old log
+
+This reclaims space without affecting any reachable data.

@@ -1,0 +1,85 @@
+---
+title: Trunk & Workspaces
+description: Pulse's model for managing concurrent work.
+---
+
+Pulse replaces Git's branch model with two concepts: **trunk** and **workspaces**.
+
+## Trunk
+
+Trunk is the single source of truth. It's a linear chain of changesets — no forks, no divergence. Every merge appends to trunk.
+
+```
+[root] → [add auth] → [fix bug] → [add homepage] → HEAD
+```
+
+There's only one trunk. Always.
+
+## Workspaces
+
+A workspace is an ephemeral unit of work. It has:
+
+- **ID** — auto-generated, e.g. `ws-c348`
+- **Intent** — what you're doing: `"add auth system"`
+- **Scope** — where you're working: `["src/auth/**"]`
+- **Author** — who created it (human or agent)
+- **Base** — the trunk changeset it branched from
+- **Status** — `active`, `merged`, or `abandoned`
+
+```bash
+pulse workspace create --intent "add auth" --scope "src/auth/**"
+```
+
+Unlike Git branches, workspaces are:
+
+- **Ephemeral** — they exist to be merged or abandoned, not to live forever
+- **Intent-driven** — they declare *why* they exist, not just *what* they're named
+- **Scope-aware** — Pulse knows which files each workspace touches
+
+## Overlap detection
+
+When you create a workspace, Pulse checks for scope overlaps with other active workspaces:
+
+```
+Created workspace ws-a1b2
+  intent: refactor auth
+  scope:  ["src/auth/**"]
+  overlaps: 1 detected
+    with ws-c348: [("src/auth/**", "src/auth/jwt.rs")]
+```
+
+This happens *before* you start working, not at merge time when it's too late.
+
+## Lifecycle
+
+```
+create → commit → commit → ... → merge
+                                    ↓
+                               (workspace closed,
+                                changes on trunk)
+```
+
+Or, if you change your mind:
+
+```
+create → commit → abandon
+                    ↓
+               (workspace closed,
+                changes discarded)
+```
+
+## Merging
+
+Merge is automatic with three-way conflict detection:
+
+- **Fast-forward** — if trunk hasn't moved since the workspace was created, changes apply directly
+- **Three-way merge** — if trunk has moved, Pulse compares the ancestor, trunk, and workspace snapshots to merge cleanly
+- **Conflict** — if both sides modified the same file, Pulse reports the conflict without modifying trunk
+
+```bash
+$ pulse merge ws-a1b2
+Merge conflict!
+  conflict: src/auth/jwt.rs
+  trunk snapshot:     a1b2c3d4
+  workspace snapshot: e5f6a7b8
+```

@@ -1,0 +1,78 @@
+---
+title: status, log, files, show, diff
+description: Commands for inspecting repository state.
+---
+
+## pulse status
+
+```bash
+pulse status
+```
+
+Show repository state: trunk head, last commit, active workspaces, and remote URL.
+
+```
+trunk:       f4a1dfe1
+last commit: implement JWT middleware
+last author: alice
+timestamp:   2025-01-15 10:30:22
+workspaces:  2 active
+remote:      https://pulse.example.com/my-project
+```
+
+## pulse log
+
+```bash
+pulse log [--author <name>] [--limit <n>]
+```
+
+Walk the trunk changeset chain and print history.
+
+| Flag | Description |
+|------|-------------|
+| `--author <name>` | Filter by author ID |
+| `--limit <n>` | Maximum entries (default: 20) |
+
+## pulse files
+
+```bash
+pulse files
+```
+
+List all files in the current trunk snapshot with their blob hashes.
+
+```
+2d1ebfa7  src/main.rs
+7e10d66f  src/auth.rs
+a3b4c5d6  README.md
+```
+
+## pulse show
+
+```bash
+pulse show <path>
+```
+
+Print the contents of a file from the trunk snapshot to stdout.
+
+```bash
+pulse show src/main.rs
+```
+
+## pulse diff
+
+```bash
+pulse diff <a> <b>
+```
+
+Compare two snapshots or changesets. Arguments can be changeset IDs (resolved to their snapshot) or snapshot IDs directly.
+
+```bash
+pulse diff f4a1dfe1 68fe576d
+```
+
+```
++ added:    src/auth.rs
++ added:    src/middleware.rs
+~ modified: src/main.rs
+```

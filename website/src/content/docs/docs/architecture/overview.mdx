@@ -1,0 +1,66 @@
+---
+title: Architecture Overview
+description: How Pulse is structured internally.
+---
+
+Pulse has two main components: a **Rust CLI client** and a **server**.
+
+## Client (Rust CLI)
+
+The CLI is a single binary that operates on a local `.pulse/` directory. It has three layers:
+
+```
+┌──────────────────────────────────┐
+│          CLI (clap)              │  ← User interface
+├──────────────────────────────────┤
+│    Core (trunk, workspace,       │  ← Domain logic
+│    merge, diff, overlap)         │
+├──────────────────────────────────┤
+│    Storage (engine, pipeline,    │  ← Persistence
+│    chunker, log, index)          │
+└──────────────────────────────────┘
+```
+
+**Storage layer**: Append-only logs, structural chunking, BLAKE3 hashing, zstd compression, content-addressed dedup.
+
+**Core layer**: Stateless managers that operate on the storage engine — `TrunkManager`, `WorkspaceManager`, `MergeEngine`, diff, overlap detection.
+
+**CLI layer**: Clap-based command parsing, auto-sync orchestration, user-facing output.
+
+## Server
+
+The server is a separate service that stores objects in a database. The reference implementation uses Hono + bun:sqlite, but the platform version will use Postgres/KV/object storage.
+
+The server exposes:
+- REST API for workspace/commit/merge operations
+- Sync endpoints (`POST /sync/push`, `POST /sync/pull`) for client sync
+
+## Sync model
+
+The client is authoritative. All hashing and chunking happens client-side. The server stores client-computed objects verbatim via the sync endpoints.
+
+```
+Client A                    Server                    Client B
+   │                          │                          │
+   ├── auto-push ──────────►  │                          │
+   │   (changesets,           │                          │
+   │    snapshots,            │                          │
+   │    file content)         │                          │
+   │                          │  ◄──── auto-pull ────────┤
+   │                          │        (same objects)     │
+```
+
+Both clients use identical algorithms (BLAKE3, structural chunking, deterministic ID computation), so objects are interchangeable.
+
+## Content addressing
+
+Every object's identity is derived from its content:
+
+| Object | ID computation |
+|--------|---------------|
+| Chunk | `BLAKE3(chunk_bytes)` |
+| Blob | `BLAKE3(file_bytes)` |
+| Snapshot | `BLAKE3(json(sorted_file_map))` |
+| Changeset | `BLAKE3(json(parent, snapshot, timestamp, author, message, files_changed, metadata))` |
+
+This makes sync reliable — if two clients produce the same content, they produce the same hashes. No coordination needed.

@@ -1,0 +1,40 @@
+---
+title: pulse commit
+description: Commit files to a workspace.
+---
+
+```bash
+pulse commit -m <message> -w <workspace> <files...>
+```
+
+Store file content and create a changeset in the specified workspace.
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `-m, --message <text>` | Commit message (required) |
+| `-w, --workspace <id>` | Target workspace ID (required) |
+| `<files...>` | File paths to commit |
+
+## What happens
+
+1. Each file is read from disk
+2. Content is structurally chunked and hashed (BLAKE3)
+3. New chunks are compressed (zstd) and stored; existing chunks are deduped
+4. A new snapshot is created from the previous snapshot + changed files
+5. A changeset is created linking the parent, snapshot, author, and message
+6. The workspace's changeset list is updated
+
+## Example
+
+```bash
+pulse commit -m "implement auth middleware" -w ws-c348 src/auth.rs src/middleware.rs
+```
+
+```
+Committed fc083972
+  new chunks:    5
+  reused chunks: 2
+  files: src/auth.rs, src/middleware.rs
+```

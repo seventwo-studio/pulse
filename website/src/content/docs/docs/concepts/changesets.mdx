@@ -1,0 +1,61 @@
+---
+title: Changesets & Snapshots
+description: How Pulse represents history and project state.
+---
+
+## Snapshots
+
+A snapshot is the complete project state at a point in time — a flat map of file paths to blob hashes.
+
+```json
+{
+  "id": "a1b2c3...",
+  "files": {
+    "src/main.rs": "d4e5f6...",
+    "src/lib.rs": "7a8b9c...",
+    "README.md": "0d1e2f..."
+  }
+}
+```
+
+Snapshot IDs are deterministic: `BLAKE3(json(files))`. Same files, same hashes, same snapshot ID. Always.
+
+## Changesets
+
+A changeset is a transition between two snapshots. It records:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Deterministic hash of all other fields |
+| `parent` | Previous changeset (or null for root) |
+| `snapshot` | The snapshot this changeset produces |
+| `author` | Who made the change (human, agent, or system) |
+| `message` | What changed and why |
+| `files_changed` | Which paths were modified |
+| `timestamp` | When it happened |
+
+Changesets are immutable and content-addressed. You can't change history — you can only append to it.
+
+## Blobs
+
+File content is stored as **blobs**. A blob is the BLAKE3 hash of the file's raw bytes, plus a list of chunk hashes for reconstruction.
+
+The storage pipeline:
+1. **Chunk** — structural chunker splits at code boundaries (functions, classes, imports)
+2. **Hash** — each chunk gets a BLAKE3 hash
+3. **Dedup** — if the chunk hash already exists, skip it
+4. **Compress** — new chunks are compressed with zstd level 3
+5. **Store** — compressed chunks go into the append-only log
+
+The blob hash is `BLAKE3(content)` — the hash of the full file, independent of chunking. This means blob hashes are deterministic across different machines.
+
+## Content addressing
+
+Everything in Pulse is content-addressed:
+
+- **Chunks**: `BLAKE3(chunk_bytes)`
+- **Blobs**: `BLAKE3(file_bytes)`
+- **Snapshots**: `BLAKE3(json(files_map))`
+- **Changesets**: `BLAKE3(json(all_fields_except_id))`
+
+This makes dedup automatic, verification trivial, and sync reliable.

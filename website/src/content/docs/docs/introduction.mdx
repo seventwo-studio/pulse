@@ -1,0 +1,43 @@
+---
+title: Introduction
+description: What Pulse is and why it exists.
+---
+
+Pulse is an AI-native version control system. It's not built on Git. It's not a Git wrapper. It's a new foundation designed for how software is actually made today — by humans and AI agents working together.
+
+## Why not Git?
+
+Git was designed in 2005 for coordinating Linux kernel patches over email. It's brilliant engineering, but its model — staging areas, detached HEADs, rebasing, reflog rescue missions — carries decades of accumulated complexity.
+
+Pulse starts from scratch with a simpler model:
+
+- **One trunk** — a single linear history. No branch spaghetti.
+- **Ephemeral workspaces** — declare your intent and scope, do your work, merge, done.
+- **Offline-first** — every command works locally. Sync is automatic and transparent.
+- **AI-native** — agents and humans are equal authors with first-class identity.
+
+## Core concepts
+
+| Concept | What it is |
+|---------|-----------|
+| **Trunk** | The single source of truth. Linear history. |
+| **Workspace** | An ephemeral unit of work with intent, scope, and author. |
+| **Changeset** | A snapshot transition — like a commit, but immutable and content-addressed. |
+| **Snapshot** | Complete project state at a point in time (path → blob hash). |
+
+## How it works
+
+```bash
+pulse init --remote https://pulse.example.com/my-project
+pulse workspace create --intent "add auth" --scope "src/auth/**"
+pulse commit -m "implement JWT" -w ws-a1b2 src/auth.rs
+pulse merge ws-a1b2
+```
+
+Every command auto-syncs with the remote in the background. If you're offline, it works locally. When connectivity returns, sync catches up automatically.
+
+## What's next
+
+- [Install Pulse](/docs/installation) to get started
+- Read about [trunk and workspaces](/docs/concepts/trunk-and-workspaces)
+- See the full [CLI reference](/docs/cli/init)

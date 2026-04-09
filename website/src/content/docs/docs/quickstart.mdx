@@ -1,0 +1,95 @@
+---
+title: Quick Start
+description: Your first Pulse workflow in 2 minutes.
+---
+
+This guide walks through a complete workflow — init, workspace, commit, merge — in under 2 minutes.
+
+## 1. Initialize a repository
+
+```bash
+mkdir my-project && cd my-project
+pulse init
+```
+
+```
+Initialized Pulse repository in .pulse/
+  changeset: f4a1dfe1
+```
+
+To sync with a remote server:
+
+```bash
+pulse init --remote http://localhost:3000
+```
+
+If the remote already has data, Pulse clones it automatically.
+
+## 2. Create a workspace
+
+```bash
+pulse workspace create --intent "add homepage" --scope "src/**"
+```
+
+```
+Created workspace ws-c348
+  intent: add homepage
+  scope:  ["src/**"]
+  base:   f4a1dfe1
+```
+
+The intent describes *what* you're doing. The scope declares *where* you're working. Pulse uses this to detect overlaps with other workspaces.
+
+## 3. Commit files
+
+```bash
+echo '<h1>Hello Pulse</h1>' > index.html
+pulse commit -m "add homepage" -w ws-c348 index.html
+```
+
+```
+Committed fc083972
+  new chunks:    1
+  reused chunks: 0
+  files: index.html
+```
+
+Files are structurally chunked, hashed with BLAKE3, and compressed with zstd. Dedup is automatic.
+
+## 4. Merge to trunk
+
+```bash
+pulse merge ws-c348
+```
+
+```
+Merged into trunk. Changeset: 68fe576d
+  files: index.html
+```
+
+The workspace is closed and your changes are on trunk. That's the whole workflow.
+
+## 5. Check your work
+
+```bash
+pulse log
+```
+
+```
+68fe576d Merge workspace ws-c348: add homepage (pulse, 2025-01-15 10:30:22)
+f4a1dfe1 Repository initialized (pulse, 2025-01-15 10:29:55)
+```
+
+```bash
+pulse files
+```
+
+```
+2d1ebfa7  index.html
+```
+
+## What's next
+
+- Learn about [trunk and workspaces](/docs/concepts/trunk-and-workspaces)
+- See how [sync](/docs/concepts/sync) works
+- Browse the [CLI reference](/docs/cli/init)

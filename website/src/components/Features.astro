@@ -1,0 +1,78 @@
+---
+const features = [
+  {
+    icon: "wifi-off",
+    title: "Offline-first",
+    description: "Every command works locally. Init, commit, merge — all instant, no server needed. Sync happens automatically when a remote is configured.",
+    color: "from-flame to-orange-400",
+  },
+  {
+    icon: "bot",
+    title: "AI-native",
+    description: "Agents and humans are equal authors. Workspaces have intent and scope, not just a branch name. Built for how software is actually made in 2025.",
+    color: "from-magenta to-pink-400",
+  },
+  {
+    icon: "git-merge",
+    title: "Simple model",
+    description: "One trunk. Ephemeral workspaces. No branch spaghetti. Merge is file-level with automatic three-way conflict detection.",
+    color: "from-indigo to-blue-400",
+  },
+  {
+    icon: "zap",
+    title: "Rust-fast",
+    description: "Rust CLI with append-only storage, structural dedup, BLAKE3 hashing, and zstd compression. Measured in microseconds, not seconds.",
+    color: "from-cyan to-teal-400",
+  },
+  {
+    icon: "scan-eye",
+    title: "Content-aware",
+    description: "Structural chunker understands code boundaries — functions, classes, imports. Better dedup and smarter diffs than line-based approaches.",
+    color: "from-flame via-magenta to-indigo",
+  },
+  {
+    icon: "shield-check",
+    title: "Overlap detection",
+    description: "Scope-aware concurrent workspace analysis. Know when two people (or agents) are working on overlapping files before conflicts happen.",
+    color: "from-emerald-400 to-cyan",
+  },
+];
+
+const icons: Record<string, string> = {
+  "wifi-off": `<path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/><path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"/><path d="M5 13a10 10 0 0 1 5.24-2.76"/><line x1="2" y1="2" x2="22" y2="22"/>`,
+  "bot": `<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>`,
+  "git-merge": `<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>`,
+  "zap": `<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>`,
+  "scan-eye": `<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/>`,
+  "shield-check": `<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>`,
+};
+---
+
+<section id="features" class="relative py-32">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-20">
+      <h2 class="text-4xl md:text-6xl font-black tracking-tight mb-6">
+        Built different.<br />
+        <span class="bg-gradient-to-r from-flame via-magenta to-indigo bg-clip-text text-transparent">On purpose.</span>
+      </h2>
+      <p class="text-xl text-text-secondary max-w-2xl mx-auto">
+        Not a Git wrapper. Not a Git alternative. A completely new foundation
+        for version control, designed for modern development.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {features.map((feature) => (
+        <div class="group relative rounded-2xl border border-white/5 bg-surface-raised p-8 hover:border-white/10 transition-all duration-300 hover:-translate-y-1">
+          <!-- Icon -->
+          <div class={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 transition-transform group-hover:scale-110`}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" set:html={icons[feature.icon]} />
+          </div>
+
+          <h3 class="text-xl font-bold mb-3">{feature.title}</h3>
+          <p class="text-text-secondary leading-relaxed">{feature.description}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

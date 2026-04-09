@@ -1,0 +1,138 @@
+---
+title: Pulse vs Git
+description: A side-by-side comparison of Pulse and Git.
+---
+
+Pulse isn't a Git wrapper or a Git-compatible alternative. It's a new system with a different model. Here's how they compare.
+
+## The model
+
+| | Git | Pulse |
+|---|---|---|
+| **History shape** | DAG (directed acyclic graph) — branches, merges, octopus merges | Linear trunk — one chain, always |
+| **Branches** | Long-lived, unlimited, named refs pointing at commits | Ephemeral workspaces with intent, scope, and lifecycle |
+| **Staging** | Explicit staging area (`git add`) between working tree and commit | No staging — commit files directly |
+| **Merge** | Multiple strategies (recursive, ours, theirs, octopus, rebase) | One strategy: three-way file-level merge with conflict detection |
+| **Identity** | Name + email in config | Typed authors: human, agent, or system |
+| **Offline** | Fully offline (but no auto-sync) | Fully offline with transparent auto-sync |
+
+## The workflow
+
+### Git
+
+```bash
+git init
+git checkout -b feature/add-auth
+git add src/auth.rs
+git commit -m "implement auth"
+git checkout main
+git merge feature/add-auth
+git push origin main
+```
+
+Seven commands. You need to know about branches, checkout, staging, and push as separate concepts.
+
+### Pulse
+
+```bash
+pulse init
+pulse workspace create --intent "add auth" --scope "src/auth/**"
+pulse commit -m "implement auth" -w ws-a1b2 src/auth.rs
+pulse merge ws-a1b2
+```
+
+Four commands. Workspace creation, committing, and merging. Sync is automatic.
+
+## What Pulse doesn't have
+
+These Git features are intentionally absent:
+
+| Git feature | Why Pulse skips it |
+|---|---|
+| **Staging area** | Adds complexity without value. Commit what you mean to commit. |
+| **Rebase** | Linear trunk means no need to rewrite history. |
+| **Stash** | Workspaces are lightweight enough to replace stashing. |
+| **Detached HEAD** | Not possible. Trunk is always the head. |
+| **Reflog** | Append-only logs mean nothing is lost implicitly. |
+| **Submodules** | Not yet. Dependency management is a separate problem. |
+| **Hooks** | Not yet. May be added as workspace lifecycle events. |
+| **Blame** | Not yet. Changeset history per file is planned. |
+| **Tags** | Not yet. Named references to changesets are planned. |
+
+## What Pulse adds
+
+These don't exist in Git:
+
+| Pulse feature | What it does |
+|---|---|
+| **Intent** | Every workspace declares *why* it exists, not just a branch name |
+| **Scope** | Declare which files a workspace touches — enables overlap detection |
+| **Overlap detection** | Know when two workspaces touch the same files *before* merge time |
+| **Agent authors** | AI agents are first-class authors with typed identity |
+| **Auto-sync** | Every command pulls before and pushes after — no manual push/pull |
+| **Structural chunking** | Language-aware chunking at function/class boundaries for better dedup |
+| **Content-addressed everything** | Snapshots, changesets, blobs — all deterministically hashed |
+
+## Merge comparison
+
+### Git: branch has diverged
+
+```
+      A---B---C  feature
+     /
+D---E---F---G    main
+```
+
+You have options: merge commit, rebase, squash. Each has trade-offs and footguns. Conflicts can appear at any point during a rebase.
+
+### Pulse: workspace vs trunk
+
+```
+trunk:     [D]→[E]→[F]→[G]    (trunk advanced)
+workspace: [D]→[A]→[B]→[C]    (workspace branched from D)
+```
+
+Pulse computes three snapshots:
+1. **Ancestor** — snapshot at D (where the workspace branched)
+2. **Trunk** — snapshot at G (current trunk)
+3. **Workspace** — snapshot at C (latest workspace commit)
+
+Files changed only on one side merge cleanly. Files changed on both sides are conflicts. One merge strategy. No options to misuse.
+
+## Sync comparison
+
+### Git
+
+```bash
+git fetch origin
+git merge origin/main   # or git pull
+# resolve conflicts if any
+git push origin main
+```
+
+Sync is manual. You choose when to fetch, merge, and push. Forgetting to push means your work is invisible to others.
+
+### Pulse
+
+```bash
+pulse commit -m "done" -w ws-a1b2 src/auth.rs
+# (synced: pulled 2 changeset(s))
+# Committed fc083972
+# (synced: pushed)
+```
+
+Sync is automatic. Every command pulls first and pushes after mutations. If you're offline, commands work locally and sync catches up when connectivity returns.
+
+## When to use which
+
+**Use Git when:**
+- You need the ecosystem (GitHub, CI/CD integrations, IDE support)
+- Your team is already proficient with Git
+- You need features like submodules, hooks, or blame
+
+**Use Pulse when:**
+- You want a simpler model without Git's historical baggage
+- You're building with AI agents that commit code
+- You want offline-first with transparent sync
+- You want overlap detection before conflicts happen
+- You value intent-driven workspaces over named branches

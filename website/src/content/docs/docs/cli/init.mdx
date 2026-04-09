@@ -1,0 +1,47 @@
+---
+title: pulse init
+description: Initialize a new Pulse repository.
+---
+
+```bash
+pulse init [--remote <url>]
+```
+
+Creates a `.pulse/` directory in the current working directory with an empty snapshot and root changeset.
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--remote <url>` | Set the remote server URL for auto-sync |
+
+## Behavior
+
+- Creates `.pulse/data/` and `.pulse/meta/` directories
+- Stores an empty snapshot and root changeset
+- Sets trunk to the root changeset
+
+If `--remote` is provided:
+- Saves the URL to `.pulse/config.json`
+- If the remote already has data, **clones it** (pulls all changesets and files)
+- If the remote is empty or unreachable, pushes the local root
+
+## Examples
+
+Local only:
+```bash
+pulse init
+```
+
+With a remote:
+```bash
+pulse init --remote https://pulse.example.com/my-project
+```
+
+Cloning an existing project:
+```bash
+mkdir my-project && cd my-project
+pulse init --remote https://pulse.example.com/existing-project
+# Initialized Pulse repository in .pulse/
+#   cloned: 42 changeset(s) from remote
+```

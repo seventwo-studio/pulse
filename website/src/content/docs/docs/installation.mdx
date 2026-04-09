@@ -1,0 +1,57 @@
+---
+title: Installation
+description: How to install the Pulse CLI.
+---
+
+Pulse is a single Rust binary. No runtime dependencies.
+
+## From source
+
+```bash
+git clone https://github.com/seventwo-studio/pulse.git
+cd pulse
+cargo install --path .
+```
+
+Requires [Rust](https://rustup.rs/) 1.85+ (2024 edition).
+
+## Verify
+
+```bash
+pulse --help
+```
+
+You should see:
+
+```
+AI-native version control
+
+Usage: pulse <COMMAND>
+
+Commands:
+  init       Initialize a new repository
+  workspace  Workspace operations
+  commit     Commit files to a workspace
+  merge      Merge a workspace into trunk
+  log        Show trunk history
+  show       Show file contents from trunk
+  files      List files in the trunk snapshot
+  diff       Compare two snapshots or changesets
+  status     Show repository status
+```
+
+## Running the reference server
+
+For sync, you need a Pulse server. The repo includes a reference implementation:
+
+```bash
+cd examples/server
+bun install
+bun run dev
+```
+
+This starts a Hono server on `http://localhost:3000` with SQLite storage.
+
+## Next steps
+
+- [Quick start guide](/docs/quickstart) — your first Pulse workflow

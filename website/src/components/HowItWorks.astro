@@ -1,0 +1,59 @@
+---
+const steps = [
+  {
+    num: "01",
+    title: "Create a workspace",
+    description: "Declare your intent and scope. Pulse tracks what you're working on and detects overlaps with others.",
+    code: `pulse workspace create \\
+  --intent "add auth system" \\
+  --scope "src/auth/**"`,
+  },
+  {
+    num: "02",
+    title: "Commit your work",
+    description: "Files are structurally chunked, hashed with BLAKE3, and compressed with zstd. Dedup happens automatically.",
+    code: `pulse commit \\
+  -m "implement JWT middleware" \\
+  -w ws-c348 \\
+  src/auth.rs src/middleware.rs`,
+  },
+  {
+    num: "03",
+    title: "Merge to trunk",
+    description: "Three-way merge with file-level conflict detection. No rebase, no squash, no ceremony. Just merge.",
+    code: `pulse merge ws-c348`,
+  },
+];
+---
+
+<section id="how-it-works" class="relative py-32">
+  <!-- Background accent -->
+  <div class="absolute inset-0 bg-gradient-to-b from-transparent via-magenta/3 to-transparent pointer-events-none"></div>
+
+  <div class="relative max-w-7xl mx-auto px-6">
+    <div class="text-center mb-20">
+      <h2 class="text-4xl md:text-6xl font-black tracking-tight mb-6">
+        Three steps.<br />
+        <span class="bg-gradient-to-r from-cyan via-indigo to-magenta bg-clip-text text-transparent">That's the whole workflow.</span>
+      </h2>
+    </div>
+
+    <div class="space-y-8">
+      {steps.map((step) => (
+        <div class="group grid md:grid-cols-2 gap-8 items-center rounded-2xl border border-white/5 bg-surface-raised p-8 md:p-12 hover:border-white/10 transition-colors">
+          <div>
+            <div class="text-6xl font-black bg-gradient-to-r from-flame via-magenta to-indigo bg-clip-text text-transparent mb-4">
+              {step.num}
+            </div>
+            <h3 class="text-2xl md:text-3xl font-bold mb-4">{step.title}</h3>
+            <p class="text-text-secondary text-lg leading-relaxed">{step.description}</p>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-surface p-6 font-mono text-sm">
+            <div class="text-text-secondary mb-2">$</div>
+            <pre class="text-cyan whitespace-pre-wrap">{step.code}</pre>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
