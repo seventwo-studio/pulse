@@ -3,6 +3,309 @@ mod core;
 mod server;
 mod storage;
 
-fn main() {
-    println!("pulse");
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use clap::{Parser, Subcommand};
+
+use client::http::PulseClient;
+use core::primitives::Author;
+
+#[derive(Parser)]
+#[command(name = "pulse", about = "AI-native version control")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Start the Pulse server
+    Server {
+        #[command(subcommand)]
+        action: ServerAction,
+    },
+    /// Initialize a repository
+    Init {
+        /// Remote server URL
+        #[arg(long)]
+        remote: Option<String>,
+        /// Use local mode (embedded server)
+        #[arg(long)]
+        local: bool,
+    },
+    /// Workspace operations
+    Workspace {
+        #[command(subcommand)]
+        action: WorkspaceAction,
+    },
+    /// Commit files to a workspace
+    Commit {
+        /// Commit message
+        #[arg(long, short)]
+        message: String,
+        /// Workspace ID
+        #[arg(long, short)]
+        workspace: String,
+        /// Files to commit
+        files: Vec<PathBuf>,
+    },
+    /// Merge a workspace into trunk
+    Merge {
+        /// Workspace ID
+        workspace: String,
+    },
+    /// Show trunk history
+    Log {
+        #[arg(long)]
+        author: Option<String>,
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Compare two snapshots
+    Diff {
+        a: String,
+        b: String,
+    },
+    /// Show repository status
+    Status,
+}
+
+#[derive(Subcommand)]
+enum ServerAction {
+    /// Start the server
+    Start {
+        #[arg(long)]
+        local: bool,
+        #[arg(long, default_value = "3000")]
+        port: u16,
+        /// Repository root path
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum WorkspaceAction {
+    /// Create a new workspace
+    Create {
+        #[arg(long)]
+        intent: String,
+        #[arg(long)]
+        scope: Vec<String>,
+    },
+    /// List workspaces
+    List {
+        #[arg(long)]
+        all: bool,
+    },
+    /// Show workspace details
+    Status {
+        id: String,
+    },
+    /// Abandon a workspace
+    Abandon {
+        id: String,
+    },
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn default_url() -> String {
+    std::env::var("PULSE_URL").unwrap_or_else(|_| "http://localhost:3000".into())
+}
+
+fn current_author() -> Author {
+    let user = std::env::var("USER").unwrap_or_else(|_| "unknown".into());
+    Author::human(user)
+}
+
+/// Format a hash as an 8-character short form.
+fn short_hash(hash: &crate::core::primitives::Hash) -> String {
+    hash.to_string()[..8].to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+
+    match cli.command {
+        Commands::Server { action } => match action {
+            ServerAction::Start { local, port, root } => {
+                tracing_subscriber::fmt::init();
+                let addr = format!("0.0.0.0:{port}");
+                server::start(&addr, &root, local).await?;
+            }
+        },
+
+        Commands::Init { remote, local: _ } => {
+            let url = remote.unwrap_or_else(default_url);
+            let client = PulseClient::new(&url);
+            let resp = client.init_repo().await?;
+            println!(
+                "Repository initialized.\n  changeset: {}\n  snapshot:  {}",
+                short_hash(&resp.changeset_id),
+                short_hash(&resp.snapshot_id),
+            );
+        }
+
+        Commands::Status => {
+            let client = PulseClient::new(&default_url());
+            let resp = client.status().await?;
+            println!("trunk:             {}", short_hash(&resp.trunk));
+            println!("active workspaces: {}", resp.active_workspaces);
+        }
+
+        Commands::Log { author, limit } => {
+            let client = PulseClient::new(&default_url());
+            let changesets = client.trunk_log(Some(limit), author.as_deref()).await?;
+            if changesets.is_empty() {
+                println!("No changesets.");
+            } else {
+                for cs in &changesets {
+                    println!(
+                        "{} {} ({}, {})",
+                        short_hash(&cs.id),
+                        cs.message,
+                        cs.author.id,
+                        cs.timestamp.format("%Y-%m-%d %H:%M:%S"),
+                    );
+                }
+            }
+        }
+
+        Commands::Workspace { action } => match action {
+            WorkspaceAction::Create { intent, scope } => {
+                let client = PulseClient::new(&default_url());
+                let author = current_author();
+                let resp = client.create_workspace(&intent, &scope, &author).await?;
+                let ws = &resp.workspace;
+                println!("Created workspace {}", ws.id);
+                println!("  intent: {}", ws.intent);
+                println!("  scope:  {:?}", ws.scope);
+                println!("  base:   {}", short_hash(&ws.base));
+                if !resp.overlaps.is_empty() {
+                    println!("  overlaps: {} detected", resp.overlaps.len());
+                }
+            }
+            WorkspaceAction::List { all } => {
+                let client = PulseClient::new(&default_url());
+                let workspaces = client.list_workspaces(all).await?;
+                if workspaces.is_empty() {
+                    println!("No workspaces.");
+                } else {
+                    println!("{:<10} {:<30} {}", "ID", "INTENT", "STATUS");
+                    for ws in &workspaces {
+                        let status = serde_json::to_value(&ws.status)
+                            .ok()
+                            .and_then(|v| v.as_str().map(String::from))
+                            .unwrap_or_else(|| format!("{:?}", ws.status));
+                        println!("{:<10} {:<30} {}", ws.id, ws.intent, status);
+                    }
+                }
+            }
+            WorkspaceAction::Status { id } => {
+                let client = PulseClient::new(&default_url());
+                let ws = client.get_workspace(&id).await?;
+                let status = serde_json::to_value(&ws.status)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_else(|| format!("{:?}", ws.status));
+                println!("Workspace {}", ws.id);
+                println!("  status:     {}", status);
+                println!("  intent:     {}", ws.intent);
+                println!("  scope:      {:?}", ws.scope);
+                println!("  author:     {} ({})", ws.author.id, format!("{:?}", ws.author.kind).to_lowercase());
+                println!("  base:       {}", short_hash(&ws.base));
+                println!("  changesets: {}", ws.changesets.len());
+            }
+            WorkspaceAction::Abandon { id } => {
+                let client = PulseClient::new(&default_url());
+                let ws = client.abandon_workspace(&id).await?;
+                println!("Abandoned workspace {}", ws.id);
+            }
+        },
+
+        Commands::Commit {
+            message,
+            workspace,
+            files,
+        } => {
+            let client = PulseClient::new(&default_url());
+            let author = current_author();
+
+            let mut file_map: HashMap<String, Vec<u8>> = HashMap::new();
+            for path in &files {
+                let bytes = std::fs::read(path)
+                    .map_err(|e| anyhow::anyhow!("failed to read {}: {}", path.display(), e))?;
+                let key = path.to_string_lossy().to_string();
+                file_map.insert(key, bytes);
+            }
+
+            let resp = client.commit(&workspace, file_map, &message, &author).await?;
+            println!("Committed {}", short_hash(&resp.changeset.id));
+            println!(
+                "  new chunks:    {}\n  reused chunks: {}",
+                resp.stats.new_chunks, resp.stats.reused_chunks,
+            );
+            if !resp.changeset.files_changed.is_empty() {
+                println!("  files: {}", resp.changeset.files_changed.join(", "));
+            }
+        }
+
+        Commands::Merge { workspace } => {
+            let client = PulseClient::new(&default_url());
+            let result = client.merge(&workspace).await?;
+
+            if let Some(cs) = result.get("changeset") {
+                let id = cs.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+                let short = &id[..id.len().min(8)];
+                println!("Merged into trunk. Changeset: {short}");
+            } else if let Some(files) = result.get("conflicting_files") {
+                println!("Merge conflict!");
+                if let Some(arr) = files.as_array() {
+                    for f in arr {
+                        if let Some(s) = f.as_str() {
+                            println!("  conflict: {s}");
+                        }
+                    }
+                }
+                if let Some(ts) = result.get("trunk_snapshot").and_then(|v| v.as_str()) {
+                    println!("  trunk snapshot:    {}", &ts[..ts.len().min(8)]);
+                }
+                if let Some(ws) = result.get("workspace_snapshot").and_then(|v| v.as_str()) {
+                    println!("  workspace snapshot: {}", &ws[..ws.len().min(8)]);
+                }
+            } else {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            }
+        }
+
+        Commands::Diff { a, b } => {
+            let client = PulseClient::new(&default_url());
+            let diff = client.diff(&a, &b).await?;
+
+            if diff.is_empty() {
+                println!("No differences.");
+            } else {
+                for path in &diff.added {
+                    println!("+ added:    {path}");
+                }
+                for path in &diff.removed {
+                    println!("- removed:  {path}");
+                }
+                for path in &diff.modified {
+                    println!("~ modified: {path}");
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
