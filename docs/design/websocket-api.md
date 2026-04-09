@@ -5,7 +5,7 @@ Real-time awareness feed. Clients subscribe on connect, receive events as they h
 ## Connection
 
 ```
-ws://seven.example.com/ws?repo=<repo-id>
+ws://pulse.example.com/ws?repo=<repo-id>
 ```
 
 ## Events

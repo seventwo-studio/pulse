@@ -6,7 +6,7 @@ Everything compiles into one Rust binary: server (REST + WebSocket), storage eng
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                  seven binary                    │
+│                  pulse binary                    │
 │                                                  │
 │  ┌──────────┐  ┌─────────────┐  ┌────────────┐  │
 │  │ REST API │  │ WebSocket   │  │ CLI Client │  │
@@ -40,16 +40,16 @@ All clients use the same protocol. Attribution distinguishes who did what.
 
 ## Deployment Modes
 
-**Hosted service** (primary) — Seven runs as a service. Agents and humans connect over the network.
+**Hosted service** (primary) — Pulse runs as a service. Agents and humans connect over the network.
 
 **Local mode** (secondary) — Same binary, same API, runs on localhost. Useful for solo dev and early prototyping before migrating to hosted.
 
 The client doesn't know the difference. Point it at a URL, it works.
 
 ```bash
-seven server start              # run as service
-seven server start --local      # run on localhost
-seven workspace create ...      # CLI talks to server either way
+pulse server start              # run as service
+pulse server start --local      # run on localhost
+pulse workspace create ...      # CLI talks to server either way
 ```
 
 ## Repo Transfer

@@ -1,6 +1,6 @@
-# Seven Design
+# Pulse Design
 
-Seven is a version control system built for AI-native development. No Git compatibility. No historical baggage. Remote-first, multiplayer-first. Single Rust binary.
+Pulse is a version control system built for AI-native development. No Git compatibility. No historical baggage. Remote-first, multiplayer-first. Single Rust binary.
 
 Multiple AI agents and humans work in parallel on a shared codebase with real-time awareness of each other's activity. Single trunk. Ephemeral workspaces. Instant sync.
 

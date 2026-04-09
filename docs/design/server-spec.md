@@ -1,8 +1,8 @@
 # Server Specification
 
-This document specifies the behavior of the Seven server precisely enough that anyone can build a conformant implementation. It covers state management, every endpoint's contract, the WebSocket protocol, storage operations, concurrency rules, and the merge algorithm.
+This document specifies the behavior of the Pulse server precisely enough that anyone can build a conformant implementation. It covers state management, every endpoint's contract, the WebSocket protocol, storage operations, concurrency rules, and the merge algorithm.
 
-The design docs describe *what* Seven is. This spec describes *how the server must behave*.
+The design docs describe *what* Pulse is. This spec describes *how the server must behave*.
 
 ---
 
@@ -27,7 +27,7 @@ The server holds two categories of state: **durable** (on disk) and **volatile**
 
 ### Durable State
 
-All durable state lives under `.seven/`:
+All durable state lives under `.pulse/`:
 
 | File | Contents | Format |
 |------|----------|--------|
@@ -61,7 +61,7 @@ If `chunks.index` exists, load it and verify its generation marker matches `chun
 
 ### Startup
 
-1. Open or create `.seven/` directory structure
+1. Open or create `.pulse/` directory structure
 2. Scan each log file. For every log:
    a. Read entries sequentially, validating checksums
    b. If the final entry has an invalid or incomplete checksum, truncate it (crash recovery)
@@ -166,7 +166,7 @@ Initialize a new repository.
 
 **Behavior**:
 1. Create an empty snapshot (no files)
-2. Create a root changeset with `parent: null`, the empty snapshot, and `author: { type: "system", id: "seven" }`
+2. Create a root changeset with `parent: null`, the empty snapshot, and `author: { type: "system", id: "pulse" }`
 3. Write the root changeset ID to `meta/trunk`
 
 **Response** `201`:
@@ -202,7 +202,7 @@ Initiate a repo transfer to another server. See [Repo Transfer Protocol](#repo-t
 **Request body**:
 ```json
 {
-  "target": "https://seven.example.com"
+  "target": "https://pulse.example.com"
 }
 ```
 

@@ -1,4 +1,4 @@
-# Seven
+# Pulse
 
 Version control built for AI-native development.
 

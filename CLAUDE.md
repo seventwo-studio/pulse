@@ -1,4 +1,4 @@
-# Seven (codename: Pulse)
+# Pulse
 
 AI-native version control system. Single Rust binary. No Git compatibility.
 

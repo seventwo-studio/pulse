@@ -64,7 +64,7 @@ Before writing a chunk, check if its hash exists in the index. If yes, skip the 
 ## On-Disk Layout
 
 ```
-.seven/
+.pulse/
   data/
     chunks.log            # append-only log of compressed chunks
     chunks.index          # persisted index snapshot (rebuilt on startup if missing)

@@ -1,6 +1,6 @@
 # Structural Chunking
 
-Seven doesn't chunk files at arbitrary byte boundaries. It splits at **structural boundaries** — the natural seams in code — so that edits to one function don't invalidate chunks belonging to the next.
+Pulse doesn't chunk files at arbitrary byte boundaries. It splits at **structural boundaries** — the natural seams in code — so that edits to one function don't invalidate chunks belonging to the next.
 
 No parser. No AST. Just lightweight line-scanning heuristics that work across languages.
 
