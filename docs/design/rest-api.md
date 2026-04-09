@@ -38,6 +38,20 @@ All operations. Stateless. Same endpoints for CLI, editors, and agents.
 | `POST` | `/workspaces/:id/merge` | Merge workspace into trunk |
 | `DELETE` | `/workspaces/:id` | Abandon workspace |
 
+## Releases
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/releases` | Create release (`{ name, changeset, author }`) — status starts at `ready` |
+| `GET` | `/releases` | List releases (`?status=`, `?since=`) |
+| `GET` | `/releases/:id` | Release detail |
+| `GET` | `/releases/latest` | Most recent `live` release |
+| `PATCH` | `/releases/:id` | Update status (`ready → testing → live`, or `→ abandoned`) |
+
+Constraints enforced server-side:
+- `changeset` must be on trunk and at or ahead of the previous release's changeset
+- Status transitions: `ready → testing → live`, `ready → abandoned`, `testing → abandoned`. No backwards moves.
+
 ## Diff & Query
 
 | Method | Endpoint | Description |

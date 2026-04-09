@@ -71,6 +71,38 @@ Single linear history. The source of truth. One ref, one line.
 trunk -> changeset-id
 ```
 
+## Release
+
+A named label on a trunk changeset with a lifecycle state. Releases always point forward — no backports, no inserting history.
+
+```json
+{
+  "id": "rel-x9k2",
+  "name": "v2.4.0",
+  "changeset": "<changeset-hash>",
+  "snapshot": "<snapshot-id>",
+  "status": "ready | testing | live | abandoned",
+  "author": {
+    "type": "human",
+    "id": "luca"
+  },
+  "created": "2026-04-09T10:00:00Z",
+  "metadata": {}
+}
+```
+
+Key properties:
+
+- **Points to a trunk changeset.** A release is a label, not a branch. It refers to an immutable point in trunk history.
+- **Always forward.** A new release must point to the same or a later changeset than the previous release. No rewinding.
+- **Lifecycle states:**
+  - `ready` — changeset selected, release created, not yet validated
+  - `testing` — being validated (CI, staging, QA)
+  - `live` — deployed to production
+  - `abandoned` — release was cancelled before going live
+- **Hotfixes go forward.** Fix lands on trunk, cut a new release from a later changeset. No patching old releases.
+- **`metadata` is open.** CI results, deploy URLs, rollback-from references — whatever the platform needs.
+
 ## Workspace
 
 An ephemeral, remote-tracked, isolated context for making changes.

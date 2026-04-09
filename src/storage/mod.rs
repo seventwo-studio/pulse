@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod chunker;
+pub mod codec;
 pub mod compaction;
 pub mod engine;
 pub mod index;

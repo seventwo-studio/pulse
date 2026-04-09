@@ -41,6 +41,19 @@ pulse diff HEAD~1 HEAD
 pulse status
 ```
 
+## Releases
+
+```bash
+pulse release create v2.4.0                 # label current trunk HEAD as a release
+pulse release create v2.4.0 --changeset <hash>  # label a specific changeset
+pulse release list                          # all releases
+pulse release list --status live            # filter by status
+pulse release status v2.4.0                 # show release detail
+pulse release promote v2.4.0 testing        # ready → testing
+pulse release promote v2.4.0 live           # testing → live
+pulse release abandon v2.4.0                # mark as abandoned
+```
+
 ## Offline
 
 ```bash

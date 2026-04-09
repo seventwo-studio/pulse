@@ -61,6 +61,43 @@ Before writing a chunk, check if its hash exists in the index. If yes, skip the 
 - File renames are free (same content, same chunks, same hashes)
 - Small edits to large files only store the changed chunks
 
+## Binary Codec
+
+Meta objects (blobs, snapshots, changesets, workspaces) are stored in a compact binary format instead of JSON. Hashes are raw 32-byte values instead of 64-byte hex strings, timestamps are i64 millis instead of ISO strings, enums are single bytes.
+
+Savings depend on content — blobs with many chunks see ~2.5x reduction, changesets with short messages ~2x, snapshots depend on path length. The codec is simple hand-rolled read/write with no dependencies (no protobuf, no bincode).
+
+### Wire layouts
+
+**Blob:** `[32B hash][u32 chunk_count][32B × chunk_count]`
+
+**Snapshot:** `[32B id][u32 file_count][for each: u16 path_len, path bytes, 32B blob_hash]`
+
+**Changeset:**
+```
+[32B id][u8 has_parent][32B parent?][32B snapshot]
+[i64 timestamp_ms][u8 author_kind][u16 author_id_len][author_id bytes]
+[u8 has_session][u16 session_len?][session bytes?]
+[u16 message_len][message bytes]
+[u16 files_count][for each: u16 path_len, path bytes]
+[u8 has_metadata][u32 meta_len?][meta JSON bytes?]
+```
+
+**Workspace:**
+```
+[u8 id_len][id bytes][32B base]
+[u16 intent_len][intent bytes]
+[u16 scope_count][for each: u16 pattern_len, pattern bytes]
+[u8 author_kind][u16 author_id_len][author_id bytes]
+[u8 has_session][u16 session_len?][session bytes?]
+[u8 status]
+[u32 changeset_count][32B × changeset_count]
+```
+
+All multi-byte integers are little-endian. Strings are UTF-8. The `metadata` field on changesets is the one exception — it stays as JSON bytes since it's an open-ended value.
+
+Note: changeset and snapshot **IDs** are still computed by hashing canonical JSON (for determinism and to avoid coupling identity to the storage format). Only the on-disk storage uses the binary codec.
+
 ## On-Disk Layout
 
 ```
@@ -69,9 +106,10 @@ Before writing a chunk, check if its hash exists in the index. If yes, skip the 
     chunks.log            # append-only log of compressed chunks
     chunks.index          # persisted index snapshot (rebuilt on startup if missing)
   meta/
-    changesets.log        # append-only log of changeset records
-    snapshots.log         # append-only log of snapshot manifests
-    workspaces.log        # append-only log of workspace lifecycle events
+    blobs.log             # append-only log of binary-encoded blobs
+    changesets.log        # append-only log of binary-encoded changeset records
+    snapshots.log         # append-only log of binary-encoded snapshot manifests
+    workspaces.log        # append-only log of binary-encoded workspace lifecycle events
     trunk                 # current trunk pointer (single changeset ID)
   config.toml             # server config, repo metadata
 ```

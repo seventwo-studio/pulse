@@ -97,6 +97,38 @@ Trunk moved forward.
 
 Workspace lifecycle events.
 
+### `release.created`
+
+A new release was created.
+
+```json
+{
+  "event": "release.created",
+  "release": {
+    "id": "rel-x9k2",
+    "name": "v2.4.0",
+    "changeset": "<changeset-hash>",
+    "status": "ready",
+    "author": { "type": "human", "id": "luca" }
+  }
+}
+```
+
+### `release.status_changed`
+
+A release moved to a new lifecycle state.
+
+```json
+{
+  "event": "release.status_changed",
+  "release_id": "rel-x9k2",
+  "name": "v2.4.0",
+  "from": "testing",
+  "to": "live",
+  "changed_by": { "type": "human", "id": "luca" }
+}
+```
+
 ### `offline.replay.started` / `offline.replay.conflict`
 
 Fired when a reconnecting client begins draining its offline queue, or when a replayed commit hits a conflict.

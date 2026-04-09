@@ -6,11 +6,12 @@
 - Hosted and local deployment modes
 - Append-only storage with BLAKE3 + structural chunking + zstd
 - Chunk deduplication
-- Core primitives: chunk, blob, snapshot, changeset, trunk, workspace
+- Core primitives: chunk, blob, snapshot, changeset, trunk, workspace, release
 - REST API for all operations
 - WebSocket feed for real-time events
 - File-level merge with conflict detection
 - Overlap detection (advisory)
+- Release lifecycle (ready → testing → live, always forward, no backports)
 - Offline write buffer with reconnect replay
 - Repo transfer (local -> remote migration)
 

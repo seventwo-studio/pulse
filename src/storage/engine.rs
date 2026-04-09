@@ -19,6 +19,7 @@ use thiserror::Error;
 
 use crate::core::primitives::*;
 
+use super::codec;
 use super::index::Index;
 use super::log::AppendLog;
 use super::pipeline::{BlobInfo, Pipeline, PipelineError};
@@ -35,8 +36,8 @@ pub enum StorageError {
     Log(#[from] super::log::LogError),
     #[error("pipeline error: {0}")]
     Pipeline(#[from] PipelineError),
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
+    #[error("codec error: {0}")]
+    Codec(#[from] codec::CodecError),
     #[error("not initialized: {0}")]
     NotInitialized(PathBuf),
     #[error("already initialized: {0}")]
@@ -164,33 +165,50 @@ impl StorageEngine {
         let snapshots_log = AppendLog::open(Self::snapshots_log_path(&root))?;
         let workspaces_log = AppendLog::open(Self::workspaces_log_path(&root))?;
 
-        // Rebuild in-memory caches from logs
+        // Rebuild in-memory caches from logs (binary codec)
         let mut blobs = HashMap::new();
         for entry in blobs_log.iter() {
             let (_offset, payload) = entry?;
-            let blob: Blob = serde_json::from_slice(&payload)?;
+            let blob = codec::decode_blob(&payload)?;
             blobs.insert(blob.hash, blob);
         }
 
         let mut changesets = HashMap::new();
         for entry in changesets_log.iter() {
             let (_offset, payload) = entry?;
-            let cs: Changeset = serde_json::from_slice(&payload)?;
+            let cs = codec::decode_changeset(&payload)?;
             changesets.insert(cs.id, cs);
         }
 
         let mut snapshots = HashMap::new();
         for entry in snapshots_log.iter() {
             let (_offset, payload) = entry?;
-            let snap: Snapshot = serde_json::from_slice(&payload)?;
+            let snap = codec::decode_snapshot(&payload)?;
             snapshots.insert(snap.id, snap);
         }
 
         let mut workspaces = HashMap::new();
         for entry in workspaces_log.iter() {
             let (_offset, payload) = entry?;
-            let ws: Workspace = serde_json::from_slice(&payload)?;
+            let ws = codec::decode_workspace(&payload)?;
             workspaces.insert(ws.id.clone(), ws);
+        }
+
+        // Synthesize single-chunk blobs from snapshots. These were never
+        // persisted to disk because blob.hash == chunk hash for single-chunk
+        // files, so the mapping is implied.
+        for snap in snapshots.values() {
+            for blob_hash in snap.files.values() {
+                if !blobs.contains_key(blob_hash) && pipeline.index().contains(blob_hash) {
+                    blobs.insert(
+                        *blob_hash,
+                        Blob {
+                            hash: *blob_hash,
+                            chunks: vec![*blob_hash],
+                        },
+                    );
+                }
+            }
         }
 
         Ok(Self {
@@ -256,12 +274,18 @@ impl StorageEngine {
 
     /// Persist a blob to the blobs log and in-memory cache.
     /// Skips writing if the blob is already known (idempotent).
+    ///
+    /// Single-chunk blobs are never written to disk — they're implied
+    /// because `blob.hash == blob.chunks[0]` (the chunk IS the full file).
+    /// They're reconstructed in memory during `open()` from snapshot data.
     fn persist_blob(&mut self, blob: &Blob) -> Result<(), StorageError> {
         if self.blobs.contains_key(&blob.hash) {
             return Ok(());
         }
-        let json = serde_json::to_vec(blob)?;
-        self.blobs_log.append(&json)?;
+        if blob.chunks.len() > 1 {
+            let encoded = codec::encode_blob(blob);
+            self.blobs_log.append(&encoded)?;
+        }
         self.blobs.insert(blob.hash, blob.clone());
         Ok(())
     }
@@ -287,8 +311,8 @@ impl StorageEngine {
 
     /// Persist a snapshot to the log and in-memory cache. Returns the snapshot id.
     pub fn store_snapshot(&mut self, snapshot: &Snapshot) -> Result<Hash, StorageError> {
-        let json = serde_json::to_vec(snapshot)?;
-        self.snapshots_log.append(&json)?;
+        let encoded = codec::encode_snapshot(snapshot);
+        self.snapshots_log.append(&encoded)?;
         let id = snapshot.id;
         self.snapshots.insert(id, snapshot.clone());
         Ok(id)
@@ -310,8 +334,8 @@ impl StorageEngine {
 
     /// Persist a changeset to the log and in-memory cache. Returns the changeset id.
     pub fn store_changeset(&mut self, changeset: &Changeset) -> Result<Hash, StorageError> {
-        let json = serde_json::to_vec(changeset)?;
-        self.changesets_log.append(&json)?;
+        let encoded = codec::encode_changeset(changeset);
+        self.changesets_log.append(&encoded)?;
         let id = changeset.id;
         self.changesets.insert(id, changeset.clone());
         Ok(id)
@@ -335,8 +359,8 @@ impl StorageEngine {
     /// The workspaces log is event-sourced: every write appends the full
     /// workspace state. On open, the last entry per workspace id wins.
     pub fn store_workspace(&mut self, workspace: &Workspace) -> Result<(), StorageError> {
-        let json = serde_json::to_vec(workspace)?;
-        self.workspaces_log.append(&json)?;
+        let encoded = codec::encode_workspace(workspace);
+        self.workspaces_log.append(&encoded)?;
         self.workspaces
             .insert(workspace.id.clone(), workspace.clone());
         Ok(())
@@ -768,5 +792,73 @@ mod tests {
         // All
         let all = engine.list_workspaces(true);
         assert_eq!(all.len(), 3);
+    }
+
+    // 15. Single-chunk blobs: not persisted to disk, synthesized on reopen
+    #[test]
+    fn single_chunk_blob_elision() {
+        let dir = tempdir().unwrap();
+
+        // Small content — will be a single chunk
+        let small_content = b"fn main() { println!(\"hello\"); }";
+        // Large content — will be multiple chunks
+        let mut large_content = String::new();
+        for i in 0..20 {
+            large_content.push_str(&format!("\npub fn function_{}() {{\n", i));
+            for j in 0..60 {
+                large_content.push_str(&format!("    let x_{} = {};\n", j, j + i * 100));
+            }
+            large_content.push_str("}\n");
+        }
+
+        let snap_id;
+        let small_blob_hash;
+        let large_blob_hash;
+
+        {
+            let mut engine = StorageEngine::init(dir.path()).unwrap();
+
+            let small_info = engine.store_file(small_content).unwrap();
+            let large_info = engine.store_file(large_content.as_bytes()).unwrap();
+
+            assert_eq!(small_info.blob.chunks.len(), 1, "small file should be 1 chunk");
+            assert!(large_info.blob.chunks.len() > 1, "large file should be multi-chunk");
+
+            small_blob_hash = small_info.blob.hash;
+            large_blob_hash = large_info.blob.hash;
+
+            // Build snapshot referencing both
+            let mut files = BTreeMap::new();
+            files.insert("small.rs".into(), small_blob_hash);
+            files.insert("large.rs".into(), large_blob_hash);
+            let snap = Snapshot::new(files);
+            snap_id = engine.store_snapshot(&snap).unwrap();
+        }
+
+        // Reopen — single-chunk blob should be synthesized from snapshot+chunk index
+        let engine = StorageEngine::open(dir.path()).unwrap();
+
+        // Both blobs should be retrievable
+        let small_blob = engine.get_blob(&small_blob_hash).unwrap();
+        assert_eq!(small_blob.chunks.len(), 1);
+
+        let large_blob = engine.get_blob(&large_blob_hash).unwrap();
+        assert!(large_blob.chunks.len() > 1);
+
+        // File content should round-trip through both paths
+        let read_small = engine.read_file_by_path(&snap_id, "small.rs").unwrap();
+        assert_eq!(read_small, small_content);
+
+        let read_large = engine.read_file_by_path(&snap_id, "large.rs").unwrap();
+        assert_eq!(read_large, large_content.as_bytes());
+
+        // Verify the blobs.log is smaller: it should NOT contain the single-chunk blob
+        let blobs_log = AppendLog::open(StorageEngine::blobs_log_path(dir.path())).unwrap();
+        let entries: Vec<_> = blobs_log.iter().map(|r| r.unwrap()).collect();
+        assert_eq!(
+            entries.len(),
+            1,
+            "only the multi-chunk blob should be persisted to disk"
+        );
     }
 }
