@@ -1,6 +1,5 @@
 mod client;
 mod core;
-mod server;
 mod storage;
 
 use std::collections::HashMap;
@@ -23,11 +22,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the Pulse server
-    Server {
-        #[command(subcommand)]
-        action: ServerAction,
-    },
     /// Initialize a repository
     Init {
         /// Remote server URL
@@ -84,20 +78,6 @@ enum Commands {
     Queue {
         #[command(subcommand)]
         action: QueueAction,
-    },
-}
-
-#[derive(Subcommand)]
-enum ServerAction {
-    /// Start the server
-    Start {
-        #[arg(long)]
-        local: bool,
-        #[arg(long, default_value = "3000")]
-        port: u16,
-        /// Repository root path
-        #[arg(long, default_value = ".")]
-        root: PathBuf,
     },
 }
 
@@ -160,14 +140,6 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Server { action } => match action {
-            ServerAction::Start { local, port, root } => {
-                tracing_subscriber::fmt::init();
-                let addr = format!("0.0.0.0:{port}");
-                server::start(&addr, &root, local).await?;
-            }
-        },
-
         Commands::Init { remote, local: _ } => {
             let url = remote.unwrap_or_else(default_url);
             let client = PulseClient::new(&url);
