@@ -20,3 +20,8 @@ Thumbs.db
 
 # Pulse data (local dev)
 .pulse/
+
+
+# Added by cargo
+
+/target
