@@ -1,6 +1,6 @@
 # Pulse
 
-AI-native version control system. Single Rust binary. No Git compatibility.
+AI-native version control system. Rust CLI client, platform-hosted server. No Git compatibility.
 
 ## Build & Run
 
@@ -8,8 +8,14 @@ AI-native version control system. Single Rust binary. No Git compatibility.
 cargo build                     # debug build
 cargo build --release           # release build
 cargo test                      # run all tests
-cargo run -- server start       # run server
-cargo run -- server start --local  # local mode
+```
+
+### Example server (for local development)
+
+```bash
+cd examples/server
+bun install
+bun run dev                     # Hono + bun:sqlite on :3000
 ```
 
 ## Project Structure
@@ -17,17 +23,19 @@ cargo run -- server start --local  # local mode
 ```
 src/
   main.rs                       # CLI entry point (clap)
-  server/                       # REST API (axum) + WebSocket feed
   storage/                      # append-only log, structural chunker, BLAKE3, zstd
   core/                         # primitives: chunk, blob, snapshot, changeset, workspace, trunk
   client/                       # HTTP/WS client used by CLI
+examples/
+  server/                       # reference server implementation (Hono + bun:sqlite)
 docs/design/                    # design documents (architecture, APIs, storage, etc.)
 ```
 
 ## Architecture
 
-- **Storage**: custom append-only log with structural chunking (FastCDC fallback), BLAKE3 hashing, zstd compression
-- **API**: REST for commands/queries, WebSocket for real-time events
+- **CLI**: Rust binary that talks to a remote Pulse server over HTTP
+- **Storage** (client-side): append-only log with structural chunking (FastCDC fallback), BLAKE3 hashing, zstd compression
+- **Server**: separate service — the example uses SQLite, the real platform will use Postgres/KV/object storage
 - **Model**: single trunk, ephemeral workspaces, server is source of truth
 - **Merge**: file-level granularity, conflicts emit `decision.needed` events
 
@@ -36,6 +44,5 @@ docs/design/                    # design documents (architecture, APIs, storage,
 - Rust 2024 edition
 - `thiserror` for library errors, `anyhow` for binary/CLI errors
 - Return `Result` types, don't panic in library code
-- `axum` for HTTP, `tokio-tungstenite` for WebSocket
 - `clap` derive API for CLI
 - Tests use `#[tokio::test]` for async, real storage (no mocks)
