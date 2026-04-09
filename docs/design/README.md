@@ -10,6 +10,7 @@ Multiple AI agents and humans work in parallel on a shared codebase with real-ti
 |----------|--------|
 | [Architecture](./architecture.md) | Binary structure, deployment modes, repo transfer |
 | [Storage Engine](./storage-engine.md) | Append-only log, content pipeline, chunk dedup, on-disk layout |
+| [Chunking](./chunking.md) | Structural chunking algorithm — boundary detection, splitting, dedup characteristics |
 | [Primitives](./primitives.md) | Chunk, blob, snapshot, changeset, trunk, workspace |
 | [Network Model](./network-model.md) | Source of truth, offline buffer, reconnect replay |
 | [REST API](./rest-api.md) | All HTTP endpoints |

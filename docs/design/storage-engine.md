@@ -34,19 +34,20 @@ Every file goes through this pipeline on commit:
 file content
      │
      ▼
-  FastCDC ── content-defined chunking, variable-size (~4KB–16KB)
+  structural ── scan for blank lines, declarations, indent changes
+  chunker       split at natural code boundaries (~512B–16KB)
+     │          fall back to FastCDC rolling hash for dense/binary content
+     ▼
+  BLAKE3 ────── hash each chunk, content-addressable
      │
      ▼
-  BLAKE3 ─── hash each chunk, content-addressable
+   zstd ─────── compress each chunk
      │
      ▼
-   zstd ──── compress each chunk
-     │
-     ▼
-  append ─── write to log, update index: hash -> (offset, len)
+  append ────── write to log, update index: hash -> (offset, len)
 ```
 
-**FastCDC** splits files at content-determined boundaries. If 3 lines are inserted in the middle of a file, only the chunks around those lines change. The rest are already stored. This gives massive dedup for the edit pattern agents produce — lots of small, frequent changes to code files.
+**Structural chunking** splits code at semantic boundaries — blank lines, top-level declarations, indentation drops — so that editing one function doesn't invalidate chunks belonging to adjacent functions. No parser, no AST, just line-scanning heuristics that work across languages. Binary files fall back to pure FastCDC. See [Chunking](./chunking.md) for the full algorithm.
 
 **BLAKE3** is 3–4x faster than SHA-256, parallelizable, with a clean license (CC0 / Apache 2.0).
 

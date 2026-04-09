@@ -99,7 +99,7 @@ This is safe because all log entries are self-contained. An incomplete trailing 
 store_chunks(file_content: bytes) -> Blob
 ```
 
-1. Run FastCDC over `file_content` with parameters: min 2KB, avg 8KB, max 32KB
+1. Run the structural chunker over `file_content` (see [Chunking](./chunking.md)): scan for boundaries, split at structural seams, fall back to FastCDC for dense/binary content. Parameters: min 512B, target 4KB, max 16KB
 2. For each chunk produced:
    a. Compute `hash = BLAKE3(chunk_bytes)`
    b. Check if `hash` exists in chunk index. If yes, skip to next chunk
