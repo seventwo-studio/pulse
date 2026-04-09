@@ -21,6 +21,12 @@ Thumbs.db
 # Pulse data (local dev)
 .pulse/
 
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
 
 # Added by cargo
 
