@@ -20,7 +20,7 @@ Everything compiles into one Rust binary: server (REST + WebSocket), storage eng
 │  │  │         Custom Storage Engine           │  │
 │  │  │                                         │  │
 │  │  │  BLAKE3 hashing                         │  │
-│  │  │  FastCDC chunking                       │  │
+│  │  │  Structural chunking (FastCDC fallback) │  │
 │  │  │  zstd compression                       │  │
 │  │  │  Append-only log + in-memory index      │  │
 │  │  └─────────────────────────────────────────┘  │

@@ -18,7 +18,7 @@ cargo run -- server start --local  # local mode
 src/
   main.rs                       # CLI entry point (clap)
   server/                       # REST API (axum) + WebSocket feed
-  storage/                      # append-only log, BLAKE3, FastCDC, zstd
+  storage/                      # append-only log, structural chunker, BLAKE3, zstd
   core/                         # primitives: chunk, blob, snapshot, changeset, workspace, trunk
   client/                       # HTTP/WS client used by CLI
 docs/design/                    # design documents (architecture, APIs, storage, etc.)
@@ -26,7 +26,7 @@ docs/design/                    # design documents (architecture, APIs, storage,
 
 ## Architecture
 
-- **Storage**: custom append-only log with BLAKE3 hashing, FastCDC chunking, zstd compression
+- **Storage**: custom append-only log with structural chunking (FastCDC fallback), BLAKE3 hashing, zstd compression
 - **API**: REST for commands/queries, WebSocket for real-time events
 - **Model**: single trunk, ephemeral workspaces, server is source of truth
 - **Merge**: file-level granularity, conflicts emit `decision.needed` events

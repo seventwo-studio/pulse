@@ -2,14 +2,14 @@
 
 ## Chunk
 
-The fundamental storage unit. A variable-size slice of file content produced by FastCDC.
+The fundamental storage unit. A variable-size slice of file content produced by the [structural chunker](./chunking.md).
 
 ```
 BLAKE3(content) -> chunk hash
 chunk hash -> compressed bytes in append-only log
 ```
 
-Clients never interact with chunks directly. They work with files and blobs. Chunking is internal to the storage engine.
+Clients never interact with chunks directly. They work with files and blobs. Chunking is internal to the storage engine. See [Chunking](./chunking.md) for how split points are chosen.
 
 ## Blob
 

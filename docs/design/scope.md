@@ -4,7 +4,7 @@
 
 - Single binary: server + storage engine + CLI
 - Hosted and local deployment modes
-- Append-only storage with BLAKE3 + FastCDC + zstd
+- Append-only storage with BLAKE3 + structural chunking + zstd
 - Chunk deduplication
 - Core primitives: chunk, blob, snapshot, changeset, trunk, workspace
 - REST API for all operations
@@ -34,7 +34,7 @@
 
 1. **Conflict resolution protocol** — when `decision.needed` fires, how does an agent or human "claim" the resolution? Locking? First-write-wins?
 2. **Workspace rebasing** — if trunk moves forward while a workspace is active, should the workspace auto-rebase? Or merge against whatever trunk was when the merge is requested?
-3. **Chunk size tuning** — FastCDC's min/avg/max chunk sizes affect dedup ratio vs. overhead. Starting point: 2KB/8KB/32KB. Needs benchmarking on real codebases.
+3. **Chunk size tuning** — the structural chunker's min/target/max sizes affect dedup ratio vs. overhead. Starting point: 512B/4KB/16KB (see [Chunking](./chunking.md)). Needs benchmarking on real codebases.
 4. **Index persistence** — rebuild from log on startup (simple, slow for large repos) or persist index snapshots (faster startup, more complexity)?
 5. **Compaction strategy** — how often? Space threshold or time interval? Background thread?
 6. **Transfer protocol** — stream the raw log file or replay through the API? Raw is faster, API replay is safer.
