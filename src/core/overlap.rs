@@ -72,6 +72,7 @@ pub fn detect_scope_overlaps(workspace: &Workspace, others: &[Workspace]) -> Vec
     results
 }
 
+#[allow(dead_code)]
 /// Detect file-level overlaps given pre-computed changed-file lists.
 ///
 /// `workspace_changed_files` is the list of files changed by the target

@@ -16,6 +16,7 @@ pub struct Hash(pub [u8; 32]);
 
 impl Hash {
     /// All-zero hash, useful in tests.
+    #[allow(dead_code)]
     pub const ZERO: Self = Self([0u8; 32]);
 
     /// Compute the BLAKE3 hash of arbitrary bytes.
@@ -25,11 +26,13 @@ impl Hash {
     }
 
     /// Wrap an existing 32-byte array.
+    #[allow(dead_code)]
     pub fn from_slice(bytes: &[u8; 32]) -> Self {
         Self(*bytes)
     }
 
     /// Borrow the inner bytes.
+    #[allow(dead_code)]
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
@@ -139,6 +142,7 @@ impl Author {
     }
 
     /// Convenience constructor for an AI-agent author.
+    #[allow(dead_code)]
     pub fn agent(id: impl Into<String>, session: Option<String>) -> Self {
         Self {
             kind: AuthorKind::Agent,
