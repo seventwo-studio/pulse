@@ -28,7 +28,7 @@ export default defineConfig({
         {
           label: "Concepts",
           items: [
-            { label: "Trunk & Workspaces", slug: "docs/concepts/trunk-and-workspaces" },
+            { label: "Main & Workspaces", slug: "docs/concepts/main-and-workspaces" },
             { label: "Changesets & Snapshots", slug: "docs/concepts/changesets" },
             { label: "Pulse vs Git", slug: "docs/concepts/compared-to-git" },
             { label: "Sync", slug: "docs/concepts/sync" },

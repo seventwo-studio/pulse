@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn workspace_roundtrip() {
         let mut ws = Workspace::new(
-            Hash::from_bytes(b"trunk-head"),
+            Hash::from_bytes(b"main-head"),
             "Add JWT auth".into(),
             vec!["src/auth/*".into(), "src/api/routes.rs".into()],
             Author::agent("claude-sonnet-4", Some("sess-1".into())),

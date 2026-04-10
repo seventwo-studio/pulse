@@ -44,7 +44,7 @@ pulse status
 ## Releases
 
 ```bash
-pulse release create v2.4.0                 # label current trunk HEAD as a release
+pulse release create v2.4.0                 # label current main HEAD as a release
 pulse release create v2.4.0 --changeset <hash>  # label a specific changeset
 pulse release list                          # all releases
 pulse release list --status live            # filter by status

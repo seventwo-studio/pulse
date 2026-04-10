@@ -24,7 +24,7 @@ bun run dev                     # Hono + bun:sqlite on :3000
 src/
   main.rs                       # CLI entry point (clap)
   storage/                      # append-only log, structural chunker, BLAKE3, zstd
-  core/                         # primitives: chunk, blob, snapshot, changeset, workspace, trunk
+  core/                         # primitives: chunk, blob, snapshot, changeset, workspace, main
   client/                       # HTTP/WS client used by CLI
 examples/
   server/                       # reference server implementation (Hono + bun:sqlite)
@@ -36,7 +36,7 @@ docs/design/                    # design documents (architecture, APIs, storage,
 - **CLI**: Rust binary that talks to a remote Pulse server over HTTP
 - **Storage** (client-side): append-only log with structural chunking (FastCDC fallback), BLAKE3 hashing, zstd compression
 - **Server**: separate service — the example uses SQLite, the real platform will use Postgres/KV/object storage
-- **Model**: single trunk, ephemeral workspaces, server is source of truth
+- **Model**: single main, ephemeral workspaces, server is source of truth
 - **Merge**: file-level granularity, conflicts emit `decision.needed` events
 
 ## Conventions

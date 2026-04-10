@@ -12,8 +12,8 @@ use crate::core::primitives::*;
 /// A bundle of objects exchanged during push/pull.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncBundle {
-    /// Trunk changeset hash.
-    pub trunk: Hash,
+    /// Main changeset hash.
+    pub main: Hash,
     /// Changesets in topological order (oldest first).
     pub changesets: Vec<Changeset>,
     /// Snapshots referenced by the changesets.
@@ -27,7 +27,7 @@ pub struct SyncBundle {
 #[derive(Debug, Deserialize)]
 pub struct SyncPushResponse {
     #[allow(dead_code)]
-    pub trunk: Hash,
+    pub main: Hash,
 }
 
 // ---------------------------------------------------------------------------
@@ -88,13 +88,13 @@ impl PulseClient {
     }
 
     /// Pull objects from the remote server.
-    /// `have_trunk` is our current trunk hash (or None if we have nothing).
+    /// `have_main` is our current main hash (or None if we have nothing).
     pub async fn sync_pull(
         &self,
-        have_trunk: Option<&Hash>,
+        have_main: Option<&Hash>,
     ) -> anyhow::Result<SyncBundle> {
         let body = serde_json::json!({
-            "have_trunk": have_trunk,
+            "have_main": have_main,
         });
         let resp = self
             .http

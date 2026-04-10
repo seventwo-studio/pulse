@@ -9,10 +9,10 @@ description: Commands for inspecting repository state.
 pulse status
 ```
 
-Show repository state: trunk head, last commit, active workspaces, and remote URL.
+Show repository state: main head, last commit, active workspaces, and remote URL.
 
 ```
-trunk:       f4a1dfe1
+main:        f4a1dfe1
 last commit: implement JWT middleware
 last author: alice
 timestamp:   2025-01-15 10:30:22
@@ -26,7 +26,7 @@ remote:      https://pulse.example.com/my-project
 pulse log [--author <name>] [--limit <n>]
 ```
 
-Walk the trunk changeset chain and print history.
+Walk the main changeset chain and print history.
 
 | Flag | Description |
 |------|-------------|
@@ -39,7 +39,7 @@ Walk the trunk changeset chain and print history.
 pulse files
 ```
 
-List all files in the current trunk snapshot with their blob hashes.
+List all files in the current main snapshot with their blob hashes.
 
 ```
 2d1ebfa7  src/main.rs
@@ -53,7 +53,7 @@ a3b4c5d6  README.md
 pulse show <path>
 ```
 
-Print the contents of a file from the trunk snapshot to stdout.
+Print the contents of a file from the main snapshot to stdout.
 
 ```bash
 pulse show src/main.rs

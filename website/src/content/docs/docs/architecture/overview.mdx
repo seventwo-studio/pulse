@@ -13,7 +13,7 @@ The CLI is a single binary that operates on a local `.pulse/` directory. It has 
 ┌──────────────────────────────────┐
 │          CLI (clap)              │  ← User interface
 ├──────────────────────────────────┤
-│    Core (trunk, workspace,       │  ← Domain logic
+│    Core (main, workspace,        │  ← Domain logic
 │    merge, diff, overlap)         │
 ├──────────────────────────────────┤
 │    Storage (engine, pipeline,    │  ← Persistence
@@ -23,7 +23,7 @@ The CLI is a single binary that operates on a local `.pulse/` directory. It has 
 
 **Storage layer**: Append-only logs, structural chunking, BLAKE3 hashing, zstd compression, content-addressed dedup.
 
-**Core layer**: Stateless managers that operate on the storage engine — `TrunkManager`, `WorkspaceManager`, `MergeEngine`, diff, overlap detection.
+**Core layer**: Stateless managers that operate on the storage engine — `MainManager`, `WorkspaceManager`, `MergeEngine`, diff, overlap detection.
 
 **CLI layer**: Clap-based command parsing, auto-sync orchestration, user-facing output.
 

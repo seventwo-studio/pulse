@@ -70,20 +70,20 @@ A merge failed due to conflict. Broadcast to all subscribers. Whoever picks it u
   "conflicts": [
     {
       "file": "src/auth/jwt.rs",
-      "trunk_changeset": "<hash>",
+      "main_changeset": "<hash>",
       "workspace_changeset": "<hash>"
     }
   ]
 }
 ```
 
-### `trunk.updated`
+### `main.updated`
 
-Trunk moved forward.
+Main moved forward.
 
 ```json
 {
-  "event": "trunk.updated",
+  "event": "main.updated",
   "changeset": {
     "id": "<hash>",
     "message": "Add JWT auth to API",

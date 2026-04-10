@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::diff::diff_snapshots;
 use crate::core::primitives::*;
-use crate::core::trunk::TrunkManager;
+use crate::core::main_ref::TrunkManager;
 use crate::storage::engine::{StorageEngine, StorageError};
 
 /// Result of a merge operation.
@@ -17,7 +17,7 @@ pub enum MergeResult {
     /// Merge failed due to conflicting files. Workspace remains active.
     Conflict {
         conflicting_files: Vec<String>,
-        trunk_snapshot: Hash,
+        main_snapshot: Hash,
         workspace_snapshot: Hash,
     },
 }
@@ -25,9 +25,9 @@ pub enum MergeResult {
 pub struct MergeEngine;
 
 impl MergeEngine {
-    /// Execute a merge of a workspace into trunk.
+    /// Execute a merge of a workspace into main.
     ///
-    /// Caller is responsible for holding the trunk lock.
+    /// Caller is responsible for holding the main lock.
     pub fn merge(
         storage: &mut StorageEngine,
         workspace_id: &str,
@@ -49,22 +49,22 @@ impl MergeEngine {
             )));
         }
 
-        // Get trunk head
-        let trunk_head_id = TrunkManager::head_id(storage)?
-            .ok_or_else(|| StorageError::NotFound("trunk head not found".into()))?;
+        // Get main head
+        let main_head_id = TrunkManager::head_id(storage)?
+            .ok_or_else(|| StorageError::NotFound("main head not found".into()))?;
 
-        if trunk_head_id == ws.base {
-            Self::fast_forward(storage, &ws, &trunk_head_id)
+        if main_head_id == ws.base {
+            Self::fast_forward(storage, &ws, &main_head_id)
         } else {
-            Self::three_way(storage, &ws, &trunk_head_id)
+            Self::three_way(storage, &ws, &main_head_id)
         }
     }
 
-    /// Fast-forward merge: trunk hasn't moved since workspace was created.
+    /// Fast-forward merge: main hasn't moved since workspace was created.
     fn fast_forward(
         storage: &mut StorageEngine,
         ws: &Workspace,
-        trunk_head_id: &Hash,
+        main_head_id: &Hash,
     ) -> Result<MergeResult, StorageError> {
         // Get the workspace's latest changeset's snapshot
         let latest_cs_id = ws.changesets.last().expect("checked non-empty above");
@@ -82,7 +82,7 @@ impl MergeEngine {
 
         // Create merge changeset
         let merge_cs = Changeset::new(
-            Some(*trunk_head_id),
+            Some(*main_head_id),
             latest_cs.snapshot,
             chrono::Utc::now(),
             Author::system(),
@@ -92,7 +92,7 @@ impl MergeEngine {
         );
         storage.store_changeset(&merge_cs)?;
 
-        // Advance trunk
+        // Advance main
         TrunkManager::advance(storage, &merge_cs.id)?;
 
         // Update workspace status to Merged
@@ -105,11 +105,11 @@ impl MergeEngine {
         })
     }
 
-    /// Three-way merge: trunk has moved since workspace was created.
+    /// Three-way merge: main has moved since workspace was created.
     fn three_way(
         storage: &mut StorageEngine,
         ws: &Workspace,
-        trunk_head_id: &Hash,
+        main_head_id: &Hash,
     ) -> Result<MergeResult, StorageError> {
         // Resolve three snapshots:
         // ancestor = workspace.base changeset's snapshot
@@ -117,10 +117,10 @@ impl MergeEngine {
         let ancestor_snapshot_id = ancestor_cs.snapshot;
         let ancestor_snapshot = storage.get_snapshot(&ancestor_snapshot_id)?.clone();
 
-        // trunk_current = trunk head's snapshot
-        let trunk_cs = storage.get_changeset(trunk_head_id)?;
-        let trunk_snapshot_id = trunk_cs.snapshot;
-        let trunk_snapshot = storage.get_snapshot(&trunk_snapshot_id)?.clone();
+        // main_current = main head's snapshot
+        let main_cs = storage.get_changeset(main_head_id)?;
+        let main_snapshot_id = main_cs.snapshot;
+        let main_snapshot = storage.get_snapshot(&main_snapshot_id)?.clone();
 
         // workspace_current = workspace's latest changeset's snapshot
         let latest_cs_id = ws.changesets.last().expect("checked non-empty above");
@@ -129,13 +129,13 @@ impl MergeEngine {
         let workspace_snapshot = storage.get_snapshot(&workspace_snapshot_id)?.clone();
 
         // Compute diffs
-        let trunk_diff = diff_snapshots(&ancestor_snapshot, &trunk_snapshot);
+        let main_diff = diff_snapshots(&ancestor_snapshot, &main_snapshot);
         let workspace_diff = diff_snapshots(&ancestor_snapshot, &workspace_snapshot);
 
         // Find conflicting files: intersection of changed paths
-        let trunk_changed: BTreeSet<String> = trunk_diff.all_changed().into_iter().collect();
+        let main_changed: BTreeSet<String> = main_diff.all_changed().into_iter().collect();
         let workspace_changed: BTreeSet<String> = workspace_diff.all_changed().into_iter().collect();
-        let conflicting_files: Vec<String> = trunk_changed
+        let conflicting_files: Vec<String> = main_changed
             .intersection(&workspace_changed)
             .cloned()
             .collect();
@@ -143,14 +143,14 @@ impl MergeEngine {
         if !conflicting_files.is_empty() {
             return Ok(MergeResult::Conflict {
                 conflicting_files,
-                trunk_snapshot: trunk_snapshot_id,
+                main_snapshot: main_snapshot_id,
                 workspace_snapshot: workspace_snapshot_id,
             });
         }
 
         // No conflicts: build merged snapshot
-        // Start from trunk_current's files, apply workspace changes
-        let mut merged_files = trunk_snapshot.files.clone();
+        // Start from main_current's files, apply workspace changes
+        let mut merged_files = main_snapshot.files.clone();
 
         // Apply workspace additions
         for path in &workspace_diff.added {
@@ -175,15 +175,15 @@ impl MergeEngine {
         let merged_snapshot = Snapshot::new(merged_files);
         storage.store_snapshot(&merged_snapshot)?;
 
-        // files_changed = union of trunk and workspace changes
-        let all_changed: Vec<String> = trunk_changed
+        // files_changed = union of main and workspace changes
+        let all_changed: Vec<String> = main_changed
             .union(&workspace_changed)
             .cloned()
             .collect();
 
         // Create merge changeset
         let merge_cs = Changeset::new(
-            Some(*trunk_head_id),
+            Some(*main_head_id),
             merged_snapshot.id,
             chrono::Utc::now(),
             Author::system(),
@@ -193,7 +193,7 @@ impl MergeEngine {
         );
         storage.store_changeset(&merge_cs)?;
 
-        // Advance trunk
+        // Advance main
         TrunkManager::advance(storage, &merge_cs.id)?;
 
         // Update workspace status to Merged
@@ -216,11 +216,11 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::core::trunk::TrunkManager;
+    use crate::core::main_ref::TrunkManager;
     use crate::core::workspace::WorkspaceManager;
     use crate::storage::engine::StorageEngine;
 
-    /// Init engine + repo with root changeset + empty snapshot + trunk.
+    /// Init engine + repo with root changeset + empty snapshot + main.
     fn setup() -> (StorageEngine, tempfile::TempDir) {
         let dir = tempdir().unwrap();
         let mut storage = StorageEngine::init(dir.path()).unwrap();
@@ -228,18 +228,18 @@ mod tests {
         (storage, dir)
     }
 
-    /// Get the current trunk head hash.
-    fn trunk_head(storage: &StorageEngine) -> Hash {
-        storage.get_trunk().unwrap().unwrap()
+    /// Get the current main head hash.
+    fn main_head(storage: &StorageEngine) -> Hash {
+        storage.get_main().unwrap().unwrap()
     }
 
-    /// Directly advance trunk by creating a new changeset with the given files.
+    /// Directly advance main by creating a new changeset with the given files.
     /// Returns the new changeset. This simulates another workspace merging first.
-    fn advance_trunk_with_files(
+    fn advance_main_with_files(
         storage: &mut StorageEngine,
         files: Vec<(&str, &[u8])>,
     ) -> Changeset {
-        let head_id = trunk_head(storage);
+        let head_id = main_head(storage);
         let head_cs = storage.get_changeset(&head_id).unwrap().clone();
         let parent_snapshot = storage.get_snapshot(&head_cs.snapshot).unwrap().clone();
 
@@ -263,7 +263,7 @@ mod tests {
             snapshot.id,
             chrono::Utc::now(),
             Author::system(),
-            "advance trunk".into(),
+            "advance main".into(),
             files_changed,
             None,
         );
@@ -276,9 +276,9 @@ mod tests {
     #[test]
     fn fast_forward_merge() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
-        // Create workspace at trunk head
+        // Create workspace at main head
         let ws = WorkspaceManager::create(
             &mut storage,
             "add feature".into(),
@@ -301,7 +301,7 @@ mod tests {
         )
         .unwrap();
 
-        let pre_merge_head = trunk_head(&storage);
+        let pre_merge_head = main_head(&storage);
 
         // Merge
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
@@ -309,11 +309,11 @@ mod tests {
         match result {
             MergeResult::Success { changeset } => {
                 // Trunk should have moved forward
-                let new_head = trunk_head(&storage);
+                let new_head = main_head(&storage);
                 assert_eq!(new_head, changeset.id);
                 assert_ne!(new_head, pre_merge_head);
 
-                // Changeset parent is the old trunk head
+                // Changeset parent is the old main head
                 assert_eq!(changeset.parent, Some(pre_merge_head));
 
                 // Files changed should include both files
@@ -335,9 +335,9 @@ mod tests {
     #[test]
     fn three_way_clean_merge() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
-        // Create workspace at trunk head
+        // Create workspace at main head
         let ws = WorkspaceManager::create(
             &mut storage,
             "add feature A".into(),
@@ -347,7 +347,7 @@ mod tests {
         )
         .unwrap();
 
-        // Commit workspace files (different from trunk advancement)
+        // Commit workspace files (different from main advancement)
         WorkspaceManager::commit(
             &mut storage,
             &ws.id,
@@ -357,13 +357,13 @@ mod tests {
         )
         .unwrap();
 
-        // Meanwhile, advance trunk with different files
-        advance_trunk_with_files(
+        // Meanwhile, advance main with different files
+        advance_main_with_files(
             &mut storage,
             vec![("src/feature_b.rs", b"// feature B")],
         );
 
-        // Trunk has moved, workspace.base != trunk head -> three-way merge
+        // Trunk has moved, workspace.base != main head -> three-way merge
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
 
         match result {
@@ -389,9 +389,9 @@ mod tests {
     #[test]
     fn three_way_conflict() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
-        // Create workspace at trunk head
+        // Create workspace at main head
         let ws = WorkspaceManager::create(
             &mut storage,
             "modify shared file".into(),
@@ -401,7 +401,7 @@ mod tests {
         )
         .unwrap();
 
-        // Commit workspace: modify the same file that trunk will touch
+        // Commit workspace: modify the same file that main will touch
         WorkspaceManager::commit(
             &mut storage,
             &ws.id,
@@ -411,13 +411,13 @@ mod tests {
         )
         .unwrap();
 
-        // Advance trunk with the same file
-        advance_trunk_with_files(
+        // Advance main with the same file
+        advance_main_with_files(
             &mut storage,
-            vec![("src/shared.rs", b"// trunk version")],
+            vec![("src/shared.rs", b"// main version")],
         );
 
-        let trunk_before = trunk_head(&storage);
+        let main_before = main_head(&storage);
 
         // Merge should detect conflict
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
@@ -425,14 +425,14 @@ mod tests {
         match result {
             MergeResult::Conflict {
                 conflicting_files,
-                trunk_snapshot,
+                main_snapshot,
                 workspace_snapshot,
             } => {
                 assert_eq!(conflicting_files, vec!["src/shared.rs".to_string()]);
-                assert_ne!(trunk_snapshot, workspace_snapshot);
+                assert_ne!(main_snapshot, workspace_snapshot);
 
                 // Trunk should NOT have moved
-                assert_eq!(trunk_head(&storage), trunk_before);
+                assert_eq!(main_head(&storage), main_before);
 
                 // Workspace should still be Active
                 let updated_ws = WorkspaceManager::get(&storage, &ws.id).unwrap();
@@ -446,7 +446,7 @@ mod tests {
     #[test]
     fn conflict_result_contains_correct_snapshots() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -468,9 +468,9 @@ mod tests {
         .unwrap();
 
         // Trunk modifies the same file
-        let trunk_cs = advance_trunk_with_files(
+        let main_cs = advance_main_with_files(
             &mut storage,
-            vec![("config.toml", b"trunk-version")],
+            vec![("config.toml", b"main-version")],
         );
 
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
@@ -478,13 +478,13 @@ mod tests {
         match result {
             MergeResult::Conflict {
                 conflicting_files,
-                trunk_snapshot,
+                main_snapshot,
                 workspace_snapshot,
             } => {
                 assert_eq!(conflicting_files, vec!["config.toml".to_string()]);
 
-                // trunk_snapshot should match trunk head's snapshot
-                assert_eq!(trunk_snapshot, trunk_cs.snapshot);
+                // main_snapshot should match main head's snapshot
+                assert_eq!(main_snapshot, main_cs.snapshot);
 
                 // workspace_snapshot should match workspace's latest commit snapshot
                 assert_eq!(workspace_snapshot, ws_commit.changeset.snapshot);
@@ -497,7 +497,7 @@ mod tests {
     #[test]
     fn empty_workspace_returns_error() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn merged_workspace_cannot_merge_again() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -553,7 +553,7 @@ mod tests {
     #[test]
     fn verify_merge_changeset_structure() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -583,12 +583,12 @@ mod tests {
         )
         .unwrap();
 
-        let pre_merge_head = trunk_head(&storage);
+        let pre_merge_head = main_head(&storage);
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
 
         match result {
             MergeResult::Success { changeset } => {
-                // Parent is old trunk head
+                // Parent is old main head
                 assert_eq!(changeset.parent, Some(pre_merge_head));
 
                 // Author is system
@@ -613,7 +613,7 @@ mod tests {
                 assert!(snap.files.contains_key("src/b.rs"));
 
                 // Trunk head is now this changeset
-                assert_eq!(trunk_head(&storage), changeset.id);
+                assert_eq!(main_head(&storage), changeset.id);
             }
             MergeResult::Conflict { .. } => panic!("expected success"),
         }
@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn three_way_merge_preserves_all_files() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         // Create workspace
         let ws = WorkspaceManager::create(
@@ -645,10 +645,10 @@ mod tests {
         )
         .unwrap();
 
-        // Trunk adds file_trunk.rs
-        advance_trunk_with_files(
+        // Trunk adds file_main.rs
+        advance_main_with_files(
             &mut storage,
-            vec![("file_trunk.rs", b"trunk file")],
+            vec![("file_main.rs", b"main file")],
         );
 
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
@@ -658,7 +658,7 @@ mod tests {
                 let snap = storage.get_snapshot(&changeset.snapshot).unwrap();
                 // Both files should be present
                 assert!(snap.files.contains_key("file_ws.rs"));
-                assert!(snap.files.contains_key("file_trunk.rs"));
+                assert!(snap.files.contains_key("file_main.rs"));
             }
             MergeResult::Conflict { .. } => panic!("expected clean merge"),
         }
@@ -669,8 +669,8 @@ mod tests {
     fn three_way_merge_with_workspace_removal() {
         let (mut storage, _dir) = setup();
 
-        // First, put a file on trunk so the workspace can remove it
-        advance_trunk_with_files(
+        // First, put a file on main so the workspace can remove it
+        advance_main_with_files(
             &mut storage,
             vec![
                 ("keep.rs", b"keep this"),
@@ -678,7 +678,7 @@ mod tests {
             ],
         );
 
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         // Create workspace
         let ws = WorkspaceManager::create(
@@ -695,7 +695,7 @@ mod tests {
         // then the removal happens in the diff between ancestor and workspace.
         // Actually, WorkspaceManager::commit adds files on top of the parent snapshot.
         // To simulate removal, we need to build a snapshot manually.
-        // Let's use a different approach: workspace adds a new file, trunk adds a different
+        // Let's use a different approach: workspace adds a new file, main adds a different
         // file, then we verify the workspace file appears. (The removal test would
         // need raw snapshot manipulation which WorkspaceManager::commit doesn't support.)
         // Instead, let's verify the three-way merge with adds on both sides.
@@ -709,9 +709,9 @@ mod tests {
         .unwrap();
 
         // Trunk adds another file (non-conflicting)
-        advance_trunk_with_files(
+        advance_main_with_files(
             &mut storage,
-            vec![("trunk_new.rs", b"trunk addition")],
+            vec![("main_new.rs", b"main addition")],
         );
 
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
@@ -723,7 +723,7 @@ mod tests {
                 assert!(snap.files.contains_key("keep.rs"));
                 assert!(snap.files.contains_key("remove_me.rs"));
                 assert!(snap.files.contains_key("new_file.rs"));
-                assert!(snap.files.contains_key("trunk_new.rs"));
+                assert!(snap.files.contains_key("main_new.rs"));
             }
             MergeResult::Conflict { .. } => panic!("expected clean merge"),
         }
@@ -733,7 +733,7 @@ mod tests {
     #[test]
     fn multiple_conflicting_files() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -758,9 +758,9 @@ mod tests {
         .unwrap();
 
         // Trunk modifies the same two files
-        advance_trunk_with_files(
+        advance_main_with_files(
             &mut storage,
-            vec![("a.rs", b"trunk-a"), ("b.rs", b"trunk-b")],
+            vec![("a.rs", b"main-a"), ("b.rs", b"main-b")],
         );
 
         let result = MergeEngine::merge(&mut storage, &ws.id).unwrap();
@@ -781,7 +781,7 @@ mod tests {
     #[test]
     fn fast_forward_accumulates_files_changed() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,

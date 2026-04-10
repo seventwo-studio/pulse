@@ -42,7 +42,7 @@ function migrate(db: Database) {
       PRIMARY KEY (snapshot_id, path)
     );
 
-    -- Changesets: a commit on trunk or a workspace
+    -- Changesets: a commit on main or a workspace
     CREATE TABLE IF NOT EXISTS changesets (
       id            TEXT PRIMARY KEY,
       parent        TEXT,
@@ -73,8 +73,8 @@ function migrate(db: Database) {
       PRIMARY KEY (workspace_id, idx)
     );
 
-    -- Trunk pointer (single row)
-    CREATE TABLE IF NOT EXISTS trunk (
+    -- Main pointer (single row)
+    CREATE TABLE IF NOT EXISTS main (
       id    INTEGER PRIMARY KEY CHECK (id = 1),
       head  TEXT REFERENCES changesets(id)
     );

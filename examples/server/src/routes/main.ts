@@ -29,36 +29,36 @@ function formatChangeset(row: ChangesetRow) {
   };
 }
 
-function getTrunkHead(db: Database): string | null {
-  const row = db.query("SELECT head FROM trunk WHERE id = 1").get() as { head: string | null } | null;
+function getMainHead(db: Database): string | null {
+  const row = db.query("SELECT head FROM main WHERE id = 1").get() as { head: string | null } | null;
   return row?.head ?? null;
 }
 
-export function trunkRoutes(db: Database) {
+export function mainRoutes(db: Database) {
   const app = new Hono();
 
-  // GET /trunk
-  app.get("/trunk", (c) => {
-    const head = getTrunkHead(db);
+  // GET /main
+  app.get("/main", (c) => {
+    const head = getMainHead(db);
     if (!head) {
       return c.json({ error: { code: "repo_not_initialized", message: "Not initialized.", status: 400 } }, 400);
     }
 
     const row = db.query("SELECT * FROM changesets WHERE id = ?").get(head) as ChangesetRow | null;
     if (!row) {
-      return c.json({ error: { code: "internal_error", message: "Trunk changeset missing.", status: 500 } }, 500);
+      return c.json({ error: { code: "internal_error", message: "Main changeset missing.", status: 500 } }, 500);
     }
 
     return c.json(formatChangeset(row));
   });
 
-  // GET /trunk/log
-  app.get("/trunk/log", (c) => {
+  // GET /main/log
+  app.get("/main/log", (c) => {
     const limit = Math.min(Number(c.req.query("limit") ?? 50), 1000);
     const author = c.req.query("author");
     const since = c.req.query("since");
 
-    const head = getTrunkHead(db);
+    const head = getMainHead(db);
     if (!head) {
       return c.json({ error: { code: "repo_not_initialized", message: "Not initialized.", status: 400 } }, 400);
     }
@@ -84,16 +84,16 @@ export function trunkRoutes(db: Database) {
     return c.json(results);
   });
 
-  // GET /trunk/snapshot
-  app.get("/trunk/snapshot", (c) => {
-    const head = getTrunkHead(db);
+  // GET /main/snapshot
+  app.get("/main/snapshot", (c) => {
+    const head = getMainHead(db);
     if (!head) {
       return c.json({ error: { code: "repo_not_initialized", message: "Not initialized.", status: 400 } }, 400);
     }
 
     const cs = db.query("SELECT snapshot FROM changesets WHERE id = ?").get(head) as { snapshot: string } | null;
     if (!cs) {
-      return c.json({ error: { code: "internal_error", message: "Trunk changeset missing.", status: 500 } }, 500);
+      return c.json({ error: { code: "internal_error", message: "Main changeset missing.", status: 500 } }, 500);
     }
 
     const files = db.query("SELECT path, blob_hash FROM snapshot_files WHERE snapshot_id = ?").all(cs.snapshot) as SnapshotFileRow[];

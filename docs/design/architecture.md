@@ -25,7 +25,7 @@ Everything compiles into one Rust binary: server (REST + WebSocket), storage eng
 │  │  │  Append-only log + in-memory index      │  │
 │  │  └─────────────────────────────────────────┘  │
 │  │                                               │
-│  │  workspaces · trunk · awareness layer         │
+│  │  workspaces · main · awareness layer         │
 │  └───────────────────────────────────────────────┘
 └──────────────────────────────────────────────────┘
        ▲              ▲              ▲

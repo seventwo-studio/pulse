@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { createDatabase } from "./db";
 import { repoRoutes } from "./routes/repo";
-import { trunkRoutes } from "./routes/trunk";
+import { mainRoutes } from "./routes/main";
 import { objectRoutes } from "./routes/objects";
 import { workspaceRoutes } from "./routes/workspaces";
 import { diffRoutes } from "./routes/diff";
@@ -15,7 +15,7 @@ const db = createDatabase(dbPath);
 const app = new Hono();
 
 app.route("/", repoRoutes(db));
-app.route("/", trunkRoutes(db));
+app.route("/", mainRoutes(db));
 app.route("/", objectRoutes(db));
 app.route("/", workspaceRoutes(db));
 app.route("/", diffRoutes(db));

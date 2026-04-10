@@ -7,11 +7,11 @@ export function repoRoutes(db: Database) {
 
   // POST /repo/init
   app.post("/repo/init", (c) => {
-    const trunk = db.query("SELECT head FROM trunk WHERE id = 1").get() as
+    const main = db.query("SELECT head FROM main WHERE id = 1").get() as
       | { head: string | null }
       | null;
 
-    if (trunk?.head) {
+    if (main?.head) {
       return c.json(
         { error: { code: "repo_already_initialized", message: "Repository has already been initialized.", status: 409 } },
         409,
@@ -53,18 +53,18 @@ export function repoRoutes(db: Database) {
       changeset.timestamp,
     );
 
-    db.query("INSERT OR REPLACE INTO trunk (id, head) VALUES (1, ?)").run(changeset.id);
+    db.query("INSERT OR REPLACE INTO main (id, head) VALUES (1, ?)").run(changeset.id);
 
     return c.json({ changeset_id: changeset.id, snapshot_id: emptySnapshotId }, 201);
   });
 
   // GET /repo/status
   app.get("/repo/status", (c) => {
-    const trunk = db.query("SELECT head FROM trunk WHERE id = 1").get() as
+    const main = db.query("SELECT head FROM main WHERE id = 1").get() as
       | { head: string | null }
       | null;
 
-    if (!trunk?.head) {
+    if (!main?.head) {
       return c.json(
         { error: { code: "repo_not_initialized", message: "Repository has not been initialized.", status: 400 } },
         400,
@@ -73,7 +73,7 @@ export function repoRoutes(db: Database) {
 
     const count = db.query("SELECT COUNT(*) as n FROM workspaces WHERE status = 'active'").get() as { n: number };
 
-    return c.json({ trunk: trunk.head, active_workspaces: count.n });
+    return c.json({ main: main.head, active_workspaces: count.n });
   });
 
   return app;

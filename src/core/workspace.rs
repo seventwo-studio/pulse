@@ -17,15 +17,15 @@ pub struct CommitResult {
 pub struct WorkspaceManager;
 
 impl WorkspaceManager {
-    /// Create a new workspace branching from the given trunk head.
+    /// Create a new workspace branching from the given main head.
     pub fn create(
         storage: &mut StorageEngine,
         intent: String,
         scope: Vec<String>,
         author: Author,
-        trunk_head: &Hash,
+        main_head: &Hash,
     ) -> Result<Workspace, StorageError> {
-        let ws = Workspace::new(*trunk_head, intent, scope, author);
+        let ws = Workspace::new(*main_head, intent, scope, author);
         storage.store_workspace(&ws)?;
         Ok(ws)
     }
@@ -141,6 +141,21 @@ impl WorkspaceManager {
     pub fn list(storage: &StorageEngine, all: bool) -> Vec<Workspace> {
         storage.list_workspaces(all).into_iter().cloned().collect()
     }
+
+    /// Get the latest snapshot for a workspace.
+    ///
+    /// If the workspace has commits, returns the last changeset's snapshot.
+    /// Otherwise returns the base changeset's snapshot (the main state at
+    /// workspace creation time).
+    pub fn snapshot(
+        storage: &StorageEngine,
+        workspace_id: &str,
+    ) -> Result<Snapshot, StorageError> {
+        let ws = storage.get_workspace(workspace_id)?;
+        let cs_id = ws.changesets.last().copied().unwrap_or(ws.base);
+        let cs = storage.get_changeset(&cs_id)?;
+        Ok(storage.get_snapshot(&cs.snapshot)?.clone())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -154,31 +169,31 @@ mod tests {
     use super::*;
     use crate::storage::engine::StorageEngine;
 
-    /// Initialize a storage engine with a valid repo state (empty snapshot + root changeset + trunk).
+    /// Initialize a storage engine with a valid repo state (empty snapshot + root changeset + main).
     fn setup() -> (StorageEngine, tempfile::TempDir) {
         let dir = tempdir().unwrap();
         let mut storage = StorageEngine::init(dir.path()).unwrap();
 
-        // Init repo: empty snapshot + root changeset + trunk
+        // Init repo: empty snapshot + root changeset + main
         let snapshot = Snapshot::empty();
         storage.store_snapshot(&snapshot).unwrap();
         let root = Changeset::root(snapshot.id);
         storage.store_changeset(&root).unwrap();
-        storage.set_trunk(&root.id).unwrap();
+        storage.set_main(&root.id).unwrap();
 
         (storage, dir)
     }
 
-    /// Helper: get the current trunk head hash from the engine.
-    fn trunk_head(storage: &StorageEngine) -> Hash {
-        storage.get_trunk().unwrap().unwrap()
+    /// Helper: get the current main head hash from the engine.
+    fn main_head(storage: &StorageEngine) -> Hash {
+        storage.get_main().unwrap().unwrap()
     }
 
-    // 1. Create workspace: verify id format (ws-XXXX), base matches trunk head, status Active
+    // 1. Create workspace: verify id format (ws-XXXX), base matches main head, status Active
     #[test]
     fn create_workspace() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -207,7 +222,7 @@ mod tests {
     #[test]
     fn commit_to_workspace() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -249,7 +264,7 @@ mod tests {
     #[test]
     fn second_commit_chains_parent() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -316,7 +331,7 @@ mod tests {
     #[test]
     fn commit_to_abandoned_workspace() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -345,7 +360,7 @@ mod tests {
     #[test]
     fn abandon_workspace() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,
@@ -384,7 +399,7 @@ mod tests {
     #[test]
     fn list_filtering() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws1 = WorkspaceManager::create(
             &mut storage,
@@ -432,7 +447,7 @@ mod tests {
     #[test]
     fn file_content_roundtrip() {
         let (mut storage, _dir) = setup();
-        let head = trunk_head(&storage);
+        let head = main_head(&storage);
 
         let ws = WorkspaceManager::create(
             &mut storage,

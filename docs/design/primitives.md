@@ -63,17 +63,17 @@ A recorded transition between two snapshots. The fundamental unit of history.
 - **`author.type` and `author.id` are mandatory.** Every change knows if it came from a human or AI, and which model/agent.
 - **`files_changed` is mandatory.** Powers the awareness layer without diffing snapshots on every commit.
 
-## Trunk
+## Main
 
 Single linear history. The source of truth. One ref, one line.
 
 ```
-trunk -> changeset-id
+main -> changeset-id
 ```
 
 ## Release
 
-A named label on a trunk changeset with a lifecycle state. Releases always point forward — no backports, no inserting history.
+A named label on a main changeset with a lifecycle state. Releases always point forward — no backports, no inserting history.
 
 ```json
 {
@@ -93,14 +93,14 @@ A named label on a trunk changeset with a lifecycle state. Releases always point
 
 Key properties:
 
-- **Points to a trunk changeset.** A release is a label, not a branch. It refers to an immutable point in trunk history.
+- **Points to a main changeset.** A release is a label, not a branch. It refers to an immutable point in main history.
 - **Always forward.** A new release must point to the same or a later changeset than the previous release. No rewinding.
 - **Lifecycle states:**
   - `ready` — changeset selected, release created, not yet validated
   - `testing` — being validated (CI, staging, QA)
   - `live` — deployed to production
   - `abandoned` — release was cancelled before going live
-- **Hotfixes go forward.** Fix lands on trunk, cut a new release from a later changeset. No patching old releases.
+- **Hotfixes go forward.** Fix lands on main, cut a new release from a later changeset. No patching old releases.
 - **`metadata` is open.** CI results, deploy URLs, rollback-from references — whatever the platform needs.
 
 ## Workspace
@@ -128,4 +128,4 @@ Key properties:
 - **Always remote.** Created on the server, immediately visible to all subscribers.
 - **Intent declared upfront.** The agent says *why* it needs this workspace.
 - **Scope declared upfront.** Which files/dirs the agent expects to touch. Advisory, not enforced — but powers overlap detection.
-- **Ephemeral.** Fork from trunk, work, merge back, gone.
+- **Ephemeral.** Fork from main, work, merge back, gone.

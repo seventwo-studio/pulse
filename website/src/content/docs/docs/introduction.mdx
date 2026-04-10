@@ -11,7 +11,7 @@ Git was designed in 2005 for coordinating Linux kernel patches over email. It's 
 
 Pulse starts from scratch with a simpler model:
 
-- **One trunk** — a single linear history. No branch spaghetti.
+- **One main** — a single linear history. No branch spaghetti.
 - **Ephemeral workspaces** — declare your intent and scope, do your work, merge, done.
 - **Offline-first** — every command works locally. Sync is automatic and transparent.
 - **AI-native** — agents and humans are equal authors with first-class identity.
@@ -20,7 +20,7 @@ Pulse starts from scratch with a simpler model:
 
 | Concept | What it is |
 |---------|-----------|
-| **Trunk** | The single source of truth. Linear history. |
+| **Main** | The single source of truth. Linear history. |
 | **Workspace** | An ephemeral unit of work with intent, scope, and author. |
 | **Changeset** | A snapshot transition — like a commit, but immutable and content-addressed. |
 | **Snapshot** | Complete project state at a point in time (path → blob hash). |
@@ -39,5 +39,5 @@ Every command auto-syncs with the remote in the background. If you're offline, i
 ## What's next
 
 - [Install Pulse](/docs/installation) to get started
-- Read about [trunk and workspaces](/docs/concepts/trunk-and-workspaces)
+- Read about [main and workspaces](/docs/concepts/main-and-workspaces)
 - See the full [CLI reference](/docs/cli/init)

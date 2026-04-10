@@ -6,7 +6,7 @@
 - Hosted and local deployment modes
 - Append-only storage with BLAKE3 + structural chunking + zstd
 - Chunk deduplication
-- Core primitives: chunk, blob, snapshot, changeset, trunk, workspace, release
+- Core primitives: chunk, blob, snapshot, changeset, main, workspace, release
 - REST API for all operations
 - WebSocket feed for real-time events
 - File-level merge with conflict detection
@@ -25,7 +25,7 @@
 | Conflict auto-resolution | Flag and fail is honest | `decision.needed` event |
 | Authentication / permissions | Trust model TBD | API layer |
 | Multi-repo | One repo at a time | Service routing |
-| Workspace-to-workspace merge | Everything goes through trunk | Workspace model |
+| Workspace-to-workspace merge | Everything goes through main | Workspace model |
 | Failed attempt tracking | Needs design pass | `metadata` field |
 | zstd dictionary training | Works fine without it initially | Storage engine config |
 | Read cache for offline | Write buffer only at MVP | Client layer |
@@ -34,7 +34,7 @@
 ## Open Questions
 
 1. **Conflict resolution protocol** — when `decision.needed` fires, how does an agent or human "claim" the resolution? Locking? First-write-wins?
-2. **Workspace rebasing** — if trunk moves forward while a workspace is active, should the workspace auto-rebase? Or merge against whatever trunk was when the merge is requested?
+2. **Workspace rebasing** — if main moves forward while a workspace is active, should the workspace auto-rebase? Or merge against whatever main was when the merge is requested?
 3. **Chunk size tuning** — the structural chunker's min/target/max sizes affect dedup ratio vs. overhead. Starting point: 512B/4KB/16KB (see [Chunking](./chunking.md)). Needs benchmarking on real codebases.
 4. **Index persistence** — rebuild from log on startup (simple, slow for large repos) or persist index snapshots (faster startup, more complexity)?
 5. **Compaction strategy** — how often? Space threshold or time interval? Background thread?

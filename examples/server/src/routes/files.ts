@@ -14,11 +14,11 @@ export function fileRoutes(db: Database) {
     if (snapshotParam) {
       snapshotId = snapshotParam;
     } else {
-      const trunk = db.query("SELECT head FROM trunk WHERE id = 1").get() as { head: string | null } | null;
-      if (!trunk?.head) {
+      const main = db.query("SELECT head FROM main WHERE id = 1").get() as { head: string | null } | null;
+      if (!main?.head) {
         return c.json({ error: { code: "repo_not_initialized", message: "Not initialized.", status: 400 } }, 400);
       }
-      const cs = db.query("SELECT snapshot FROM changesets WHERE id = ?").get(trunk.head) as { snapshot: string };
+      const cs = db.query("SELECT snapshot FROM changesets WHERE id = ?").get(main.head) as { snapshot: string };
       snapshotId = cs.snapshot;
     }
 

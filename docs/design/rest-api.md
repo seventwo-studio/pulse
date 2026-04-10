@@ -7,16 +7,16 @@ All operations. Stateless. Same endpoints for CLI, editors, and agents.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/repo/init` | Create a new repository |
-| `GET` | `/repo/status` | Current trunk head, active workspaces |
+| `GET` | `/repo/status` | Current main head, active workspaces |
 | `POST` | `/repo/transfer` | Initiate repo transfer to another server |
 
-## Trunk
+## Main
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/trunk` | Current trunk changeset |
-| `GET` | `/trunk/log` | Changeset history (`?author=`, `?since=`) |
-| `GET` | `/trunk/snapshot` | Current trunk snapshot (file manifest) |
+| `GET` | `/main` | Current main changeset |
+| `GET` | `/main/log` | Changeset history (`?author=`, `?since=`) |
+| `GET` | `/main/snapshot` | Current main snapshot (file manifest) |
 
 ## Objects
 
@@ -35,7 +35,7 @@ All operations. Stateless. Same endpoints for CLI, editors, and agents.
 | `GET` | `/workspaces` | List active workspaces |
 | `GET` | `/workspaces/:id` | Workspace detail + changeset list |
 | `POST` | `/workspaces/:id/commit` | Commit to workspace (instantly synced) |
-| `POST` | `/workspaces/:id/merge` | Merge workspace into trunk |
+| `POST` | `/workspaces/:id/merge` | Merge workspace into main |
 | `DELETE` | `/workspaces/:id` | Abandon workspace |
 
 ## Releases
@@ -49,7 +49,7 @@ All operations. Stateless. Same endpoints for CLI, editors, and agents.
 | `PATCH` | `/releases/:id` | Update status (`ready → testing → live`, or `→ abandoned`) |
 
 Constraints enforced server-side:
-- `changeset` must be on trunk and at or ahead of the previous release's changeset
+- `changeset` must be on main and at or ahead of the previous release's changeset
 - Status transitions: `ready → testing → live`, `ready → abandoned`, `testing → abandoned`. No backwards moves.
 
 ## Diff & Query
@@ -57,5 +57,5 @@ Constraints enforced server-side:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/diff/:a/:b` | File-level diff between two changesets |
-| `GET` | `/files/:path` | File content at trunk head |
+| `GET` | `/files/:path` | File content at main head |
 | `GET` | `/files/:path?ref=:changeset` | File content at specific changeset |

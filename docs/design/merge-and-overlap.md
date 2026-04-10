@@ -6,7 +6,7 @@ File-level granularity. Same file touched by both sides = conflict.
 
 1. Find common ancestor (workspace's `base` changeset)
 2. Diff workspace snapshot vs. ancestor — files changed in workspace
-3. Diff trunk snapshot vs. ancestor — files changed in trunk since workspace was created
+3. Diff main snapshot vs. ancestor — files changed in main since workspace was created
 4. **No overlap** — auto-merge, apply both sets of changes
 5. **Overlap** — fail, emit `decision.needed` event with both versions of conflicting files
 
@@ -43,8 +43,8 @@ Agent B: create workspace for token refresh in src/auth/
   -> each agent sees what the other is working on
 
 Agent A commits and merges:
-  -> no conflict with trunk, merged
-  -> trunk.updated + workspace.merged
+  -> no conflict with main, merged
+  -> main.updated + workspace.merged
 
 Agent B commits and merges:
   -> conflict: src/auth/mod.rs changed by both

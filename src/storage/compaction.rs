@@ -1,7 +1,7 @@
 // Log compaction: reclaim space by copying only referenced chunks to a new log.
 //
 // Algorithm:
-// 1. Walk all snapshots reachable from trunk (changeset parent chain)
+// 1. Walk all snapshots reachable from main (changeset parent chain)
 // 2. Collect all blob hashes referenced by those snapshots
 // 3. For each blob, collect chunk hashes
 // 4. The set of referenced chunk hashes = chunks to keep
@@ -31,7 +31,7 @@ pub struct CompactionStats {
 impl StorageEngine {
     /// Compact the chunks log by copying only referenced chunks.
     ///
-    /// Walks the changeset parent chain from trunk, collects every chunk hash
+    /// Walks the changeset parent chain from main, collects every chunk hash
     /// that is still reachable through snapshots and blobs, then rewrites the
     /// chunks log keeping only those chunks. The in-memory pipeline index is
     /// rebuilt to match the new log.
@@ -119,15 +119,15 @@ impl StorageEngine {
         })
     }
 
-    /// Walk the changeset chain from trunk and collect every chunk hash
+    /// Walk the changeset chain from main and collect every chunk hash
     /// that is reachable through snapshots → blobs → chunks.
     fn collect_referenced_chunks(&self) -> HashSet<Hash> {
         let mut referenced = HashSet::new();
         let mut blob_hashes: HashSet<Hash> = HashSet::new();
 
-        // Walk trunk's changeset parent chain.
-        if let Ok(Some(trunk_id)) = self.get_trunk() {
-            let mut current = Some(trunk_id);
+        // Walk main's changeset parent chain.
+        if let Ok(Some(main_id)) = self.get_main() {
+            let mut current = Some(main_id);
             while let Some(cs_id) = current {
                 if let Ok(cs) = self.get_changeset(&cs_id) {
                     if let Ok(snapshot) = self.get_snapshot(&cs.snapshot) {
@@ -183,8 +183,8 @@ mod tests {
     use crate::storage::engine::StorageEngine;
 
     /// Helper: init an engine, store a file, create a snapshot + changeset,
-    /// and set trunk. Returns (engine, tempdir, snapshot_id, file content).
-    fn setup_with_trunk() -> (StorageEngine, tempfile::TempDir, Hash, Vec<u8>) {
+    /// and set main. Returns (engine, tempdir, snapshot_id, file content).
+    fn setup_with_main() -> (StorageEngine, tempfile::TempDir, Hash, Vec<u8>) {
         let dir = tempdir().unwrap();
         let mut engine = StorageEngine::init(dir.path()).unwrap();
 
@@ -206,7 +206,7 @@ mod tests {
             None,
         );
         let cs_id = engine.store_changeset(&cs).unwrap();
-        engine.set_trunk(&cs_id).unwrap();
+        engine.set_main(&cs_id).unwrap();
 
         (engine, dir, snap_id, content)
     }
@@ -214,7 +214,7 @@ mod tests {
     // 1. Compact with no abandoned data: all chunks survive.
     #[test]
     fn compact_no_abandoned_data() {
-        let (mut engine, _dir, _snap_id, _content) = setup_with_trunk();
+        let (mut engine, _dir, _snap_id, _content) = setup_with_main();
 
         let stats = engine.compact().unwrap();
 
@@ -229,8 +229,8 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut engine = StorageEngine::init(dir.path()).unwrap();
 
-        // Store a file that will be referenced (via trunk).
-        let referenced_content = b"this content is referenced by trunk";
+        // Store a file that will be referenced (via main).
+        let referenced_content = b"this content is referenced by main";
         let ref_info = engine.store_file(referenced_content).unwrap();
 
         let mut files = BTreeMap::new();
@@ -248,7 +248,7 @@ mod tests {
             None,
         );
         let cs_id = engine.store_changeset(&cs).unwrap();
-        engine.set_trunk(&cs_id).unwrap();
+        engine.set_main(&cs_id).unwrap();
 
         // Store another file that is NOT referenced by any snapshot/changeset.
         let orphan_content = b"this content is orphaned and should be removed";
@@ -270,7 +270,7 @@ mod tests {
     // 3. File content still readable after compaction.
     #[test]
     fn content_readable_after_compaction() {
-        let (mut engine, _dir, snap_id, content) = setup_with_trunk();
+        let (mut engine, _dir, snap_id, content) = setup_with_main();
 
         engine.compact().unwrap();
 
@@ -278,7 +278,7 @@ mod tests {
         assert_eq!(read_back, content);
     }
 
-    // 4. Compaction with empty repository (no trunk).
+    // 4. Compaction with empty repository (no main).
     #[test]
     fn compact_empty_repo() {
         let dir = tempdir().unwrap();
@@ -317,7 +317,7 @@ mod tests {
                 None,
             );
             let cs_id = engine.store_changeset(&cs).unwrap();
-            engine.set_trunk(&cs_id).unwrap();
+            engine.set_main(&cs_id).unwrap();
 
             // Store orphan data
             engine

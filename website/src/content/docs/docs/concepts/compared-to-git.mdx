@@ -9,7 +9,7 @@ Pulse isn't a Git wrapper or a Git-compatible alternative. It's a new system wit
 
 | | Git | Pulse |
 |---|---|---|
-| **History shape** | DAG (directed acyclic graph) — branches, merges, octopus merges | Linear trunk — one chain, always |
+| **History shape** | DAG (directed acyclic graph) — branches, merges, octopus merges | Linear main — one chain, always |
 | **Branches** | Long-lived, unlimited, named refs pointing at commits | Ephemeral workspaces with intent, scope, and lifecycle |
 | **Staging** | Explicit staging area (`git add`) between working tree and commit | No staging — commit files directly |
 | **Merge** | Multiple strategies (recursive, ours, theirs, octopus, rebase) | One strategy: three-way file-level merge with conflict detection |
@@ -50,9 +50,9 @@ These Git features are intentionally absent:
 | Git feature | Why Pulse skips it |
 |---|---|
 | **Staging area** | Adds complexity without value. Commit what you mean to commit. |
-| **Rebase** | Linear trunk means no need to rewrite history. |
+| **Rebase** | Linear main means no need to rewrite history. |
 | **Stash** | Workspaces are lightweight enough to replace stashing. |
-| **Detached HEAD** | Not possible. Trunk is always the head. |
+| **Detached HEAD** | Not possible. Main is always the head. |
 | **Reflog** | Append-only logs mean nothing is lost implicitly. |
 | **Submodules** | Not yet. Dependency management is a separate problem. |
 | **Hooks** | Not yet. May be added as workspace lifecycle events. |
@@ -85,16 +85,16 @@ D---E---F---G    main
 
 You have options: merge commit, rebase, squash. Each has trade-offs and footguns. Conflicts can appear at any point during a rebase.
 
-### Pulse: workspace vs trunk
+### Pulse: workspace vs main
 
 ```
-trunk:     [D]→[E]→[F]→[G]    (trunk advanced)
+main:      [D]→[E]→[F]→[G]    (main advanced)
 workspace: [D]→[A]→[B]→[C]    (workspace branched from D)
 ```
 
 Pulse computes three snapshots:
 1. **Ancestor** — snapshot at D (where the workspace branched)
-2. **Trunk** — snapshot at G (current trunk)
+2. **Main** — snapshot at G (current main)
 3. **Workspace** — snapshot at C (latest workspace commit)
 
 Files changed only on one side merge cleanly. Files changed on both sides are conflicts. One merge strategy. No options to misuse.

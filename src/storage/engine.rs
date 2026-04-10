@@ -9,7 +9,7 @@
 //       changesets.log    — serialized Changeset JSON per entry
 //       snapshots.log     — serialized Snapshot JSON per entry
 //       workspaces.log    — serialized Workspace JSON per entry (full state per event)
-//       trunk             — current trunk changeset ID as hex string
+//       main             — current main changeset ID as hex string
 
 use std::collections::HashMap;
 use std::fs;
@@ -99,8 +99,8 @@ impl StorageEngine {
         Self::meta_dir(root).join("workspaces.log")
     }
 
-    fn trunk_path(root: &Path) -> PathBuf {
-        Self::meta_dir(root).join("trunk")
+    fn main_path(root: &Path) -> PathBuf {
+        Self::meta_dir(root).join("main")
     }
 
     // -- Init / Open -------------------------------------------------------
@@ -230,6 +230,21 @@ impl StorageEngine {
     /// Store raw file content, returning chunk/blob information.
     /// Also persists the resulting `Blob` for later lookup by hash.
     pub fn store_file(&mut self, content: &[u8]) -> Result<BlobInfo, StorageError> {
+        // Empty files produce zero chunks — store only the blob metadata.
+        if content.is_empty() {
+            let blob = Blob {
+                hash: Hash::from_bytes(content),
+                chunks: vec![],
+            };
+            self.persist_blob(&blob)?;
+            return Ok(BlobInfo {
+                blob,
+                stats: super::pipeline::StoreStats {
+                    new_chunks: 0,
+                    reused_chunks: 0,
+                },
+            });
+        }
         let info = self.pipeline.store_file(content)?;
         self.persist_blob(&info.blob)?;
         Ok(info)
@@ -267,6 +282,9 @@ impl StorageEngine {
             .get(path)
             .ok_or_else(|| StorageError::NotFound(format!("file '{}' in snapshot {}", path, snapshot_id)))?;
         let blob = self.get_blob(blob_hash)?;
+        if blob.chunks.is_empty() {
+            return Ok(Vec::new());
+        }
         Ok(self.pipeline.read_blob(blob)?)
     }
 
@@ -278,11 +296,12 @@ impl StorageEngine {
     /// Single-chunk blobs are never written to disk — they're implied
     /// because `blob.hash == blob.chunks[0]` (the chunk IS the full file).
     /// They're reconstructed in memory during `open()` from snapshot data.
+    /// Zero-chunk blobs (empty files) are always persisted to disk.
     fn persist_blob(&mut self, blob: &Blob) -> Result<(), StorageError> {
         if self.blobs.contains_key(&blob.hash) {
             return Ok(());
         }
-        if blob.chunks.len() > 1 {
+        if blob.chunks.len() != 1 {
             let encoded = codec::encode_blob(blob);
             self.blobs_log.append(&encoded)?;
         }
@@ -381,12 +400,12 @@ impl StorageEngine {
             .collect()
     }
 
-    // -- Trunk -------------------------------------------------------------
+    // -- Main -------------------------------------------------------------
 
-    /// Read the current trunk changeset id from `.pulse/meta/trunk`.
+    /// Read the current main changeset id from `.pulse/meta/main`.
     /// Returns `None` if the file doesn't exist yet.
-    pub fn get_trunk(&self) -> Result<Option<Hash>, StorageError> {
-        let path = Self::trunk_path(&self.root);
+    pub fn get_main(&self) -> Result<Option<Hash>, StorageError> {
+        let path = Self::main_path(&self.root);
         if !path.exists() {
             return Ok(None);
         }
@@ -397,13 +416,13 @@ impl StorageEngine {
         }
         let hash: Hash = hex
             .parse()
-            .map_err(|e| StorageError::NotFound(format!("invalid trunk hash: {}", e)))?;
+            .map_err(|e| StorageError::NotFound(format!("invalid main hash: {}", e)))?;
         Ok(Some(hash))
     }
 
-    /// Atomically set the trunk changeset id by writing to a tmp file and renaming.
-    pub fn set_trunk(&self, changeset_id: &Hash) -> Result<(), StorageError> {
-        let path = Self::trunk_path(&self.root);
+    /// Atomically set the main changeset id by writing to a tmp file and renaming.
+    pub fn set_main(&self, changeset_id: &Hash) -> Result<(), StorageError> {
+        let path = Self::main_path(&self.root);
         let tmp = path.with_extension("tmp");
         fs::write(&tmp, changeset_id.to_string())?;
         fs::rename(&tmp, &path)?;
@@ -463,7 +482,7 @@ mod tests {
 
         // Reopen should succeed
         let engine = StorageEngine::open(dir.path()).unwrap();
-        assert!(engine.get_trunk().unwrap().is_none());
+        assert!(engine.get_main().unwrap().is_none());
     }
 
     // 2. Store and retrieve changeset
@@ -542,20 +561,20 @@ mod tests {
 
     // 5. Trunk: set, drop, reopen, get
     #[test]
-    fn trunk_persists_across_reopen() {
+    fn main_persists_across_reopen() {
         let dir = tempdir().unwrap();
-        let hash = Hash::from_bytes(b"trunk changeset");
+        let hash = Hash::from_bytes(b"main changeset");
 
         {
             let engine = StorageEngine::init(dir.path()).unwrap();
-            assert!(engine.get_trunk().unwrap().is_none());
-            engine.set_trunk(&hash).unwrap();
-            assert_eq!(engine.get_trunk().unwrap(), Some(hash));
+            assert!(engine.get_main().unwrap().is_none());
+            engine.set_main(&hash).unwrap();
+            assert_eq!(engine.get_main().unwrap(), Some(hash));
         }
 
-        // Reopen and verify trunk survived
+        // Reopen and verify main survived
         let engine = StorageEngine::open(dir.path()).unwrap();
-        assert_eq!(engine.get_trunk().unwrap(), Some(hash));
+        assert_eq!(engine.get_main().unwrap(), Some(hash));
     }
 
     // 6. Workspaces: store, list, update, get returns latest
@@ -664,8 +683,8 @@ mod tests {
             ws_id = ws.id.clone();
             engine.store_workspace(&ws).unwrap();
 
-            // Set trunk
-            engine.set_trunk(&cs_id).unwrap();
+            // Set main
+            engine.set_main(&cs_id).unwrap();
         }
 
         // Reopen and verify everything
@@ -683,7 +702,7 @@ mod tests {
         let ws = engine.get_workspace(&ws_id).unwrap();
         assert_eq!(ws.changesets.len(), 1);
 
-        assert_eq!(engine.get_trunk().unwrap(), Some(cs_id));
+        assert_eq!(engine.get_main().unwrap(), Some(cs_id));
     }
 
     // 10. Not found errors

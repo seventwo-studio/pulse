@@ -17,7 +17,7 @@ Pulse's local storage lives in a `.pulse/` directory at the repository root.
     changesets.log     # Changeset JSON entries
     snapshots.log      # Snapshot JSON entries
     workspaces.log     # Workspace state (event-sourced)
-    trunk              # Current trunk changeset ID (hex string)
+    main               # Current main changeset ID (hex string)
 ```
 
 ## Append-only logs
@@ -55,7 +55,7 @@ Chunks are compressed with zstd at level 3 before storage. Decompression happens
 
 Over time, abandoned workspaces leave unreferenced chunks in the log. The compaction process:
 
-1. Walk all snapshots reachable from trunk
+1. Walk all snapshots reachable from main
 2. Collect all referenced chunk hashes
 3. Copy referenced chunks to a new log
 4. Replace the old log

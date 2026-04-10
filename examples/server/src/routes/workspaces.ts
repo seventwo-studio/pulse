@@ -64,15 +64,15 @@ export function workspaceRoutes(db: Database) {
   app.post("/workspaces", async (c) => {
     const body = await c.req.json<{ intent: string; scope: string[]; author: { id: string; kind: string } }>();
 
-    const trunk = db.query("SELECT head FROM trunk WHERE id = 1").get() as { head: string | null } | null;
-    if (!trunk?.head) {
+    const main = db.query("SELECT head FROM main WHERE id = 1").get() as { head: string | null } | null;
+    if (!main?.head) {
       return c.json({ error: { code: "repo_not_initialized", message: "Not initialized.", status: 400 } }, 400);
     }
 
     const id = generateWorkspaceId();
     db.query(
       "INSERT INTO workspaces (id, intent, scope, base, author_id, author_kind) VALUES (?, ?, ?, ?, ?, ?)",
-    ).run(id, body.intent, JSON.stringify(body.scope), trunk.head, body.author.id, body.author.kind);
+    ).run(id, body.intent, JSON.stringify(body.scope), main.head, body.author.id, body.author.kind);
 
     const ws = db.query("SELECT * FROM workspaces WHERE id = ?").get(id) as WorkspaceRow;
 
@@ -209,20 +209,20 @@ export function workspaceRoutes(db: Database) {
       return c.json({ error: { code: "workspace_not_found", message: `Workspace ${id} not found or not active.`, status: 404 } }, 404);
     }
 
-    const trunk = db.query("SELECT head FROM trunk WHERE id = 1").get() as { head: string };
+    const main = db.query("SELECT head FROM main WHERE id = 1").get() as { head: string };
 
     // Get workspace's latest snapshot
     const wsSnapshotId = getLatestSnapshot(db, id);
 
-    // Get trunk's current snapshot
-    const trunkCs = db.query("SELECT snapshot FROM changesets WHERE id = ?").get(trunk.head) as { snapshot: string };
-    const trunkSnapshotId = trunkCs.snapshot;
+    // Get main's current snapshot
+    const mainCs = db.query("SELECT snapshot FROM changesets WHERE id = ?").get(main.head) as { snapshot: string };
+    const mainSnapshotId = mainCs.snapshot;
 
     // Get base snapshot
     const baseCs = db.query("SELECT snapshot FROM changesets WHERE id = ?").get(ws.base) as { snapshot: string };
 
-    // Check for conflicts: files modified in both trunk and workspace since the base
-    const trunkFiles = db.query("SELECT path, blob_hash FROM snapshot_files WHERE snapshot_id = ?").all(trunkSnapshotId) as { path: string; blob_hash: string }[];
+    // Check for conflicts: files modified in both main and workspace since the base
+    const mainFiles = db.query("SELECT path, blob_hash FROM snapshot_files WHERE snapshot_id = ?").all(mainSnapshotId) as { path: string; blob_hash: string }[];
     const wsFiles = db.query("SELECT path, blob_hash FROM snapshot_files WHERE snapshot_id = ?").all(wsSnapshotId) as { path: string; blob_hash: string }[];
     const baseFiles = db.query("SELECT path, blob_hash FROM snapshot_files WHERE snapshot_id = ?").all(baseCs.snapshot) as { path: string; blob_hash: string }[];
 
@@ -231,7 +231,7 @@ export function workspaceRoutes(db: Database) {
       for (const r of rows) m[r.path] = r.blob_hash;
       return m;
     };
-    const trunkMap = toMap(trunkFiles);
+    const mainMap = toMap(mainFiles);
     const wsMap = toMap(wsFiles);
     const baseMap = toMap(baseFiles);
 
@@ -239,8 +239,8 @@ export function workspaceRoutes(db: Database) {
     const conflicts: string[] = [];
     for (const path of Object.keys(wsMap)) {
       const wsChanged = wsMap[path] !== baseMap[path];
-      const trunkChanged = trunkMap[path] !== undefined && trunkMap[path] !== baseMap[path];
-      if (wsChanged && trunkChanged && wsMap[path] !== trunkMap[path]) {
+      const mainChanged = mainMap[path] !== undefined && mainMap[path] !== baseMap[path];
+      if (wsChanged && mainChanged && wsMap[path] !== mainMap[path]) {
         conflicts.push(path);
       }
     }
@@ -250,15 +250,15 @@ export function workspaceRoutes(db: Database) {
         {
           error: { code: "merge_conflict", message: `Merge conflict in workspace ${id}`, status: 409 },
           conflicting_files: conflicts,
-          trunk_snapshot: trunkSnapshotId,
+          main_snapshot: mainSnapshotId,
           workspace_snapshot: wsSnapshotId,
         },
         409,
       );
     }
 
-    // Fast-forward or merge: apply workspace changes on top of trunk
-    const mergedFiles = { ...trunkMap };
+    // Fast-forward or merge: apply workspace changes on top of main
+    const mergedFiles = { ...mainMap };
     for (const [path, blobHash] of Object.entries(wsMap)) {
       if (blobHash !== baseMap[path]) {
         mergedFiles[path] = blobHash;
@@ -279,7 +279,7 @@ export function workspaceRoutes(db: Database) {
     const timestamp = new Date().toISOString();
     const filesChanged = Object.keys(wsMap).filter((p) => wsMap[p] !== baseMap[p]);
     const changesetId = hashJson({
-      parent: trunk.head,
+      parent: main.head,
       snapshot: mergedSnapshotId,
       message: `Merge workspace ${id}`,
       author_id: ws.author_id,
@@ -289,10 +289,10 @@ export function workspaceRoutes(db: Database) {
 
     db.query(
       "INSERT INTO changesets (id, parent, snapshot, message, author_id, author_kind, files_changed, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(changesetId, trunk.head, mergedSnapshotId, `Merge workspace ${id}`, ws.author_id, ws.author_kind, JSON.stringify(filesChanged), timestamp);
+    ).run(changesetId, main.head, mergedSnapshotId, `Merge workspace ${id}`, ws.author_id, ws.author_kind, JSON.stringify(filesChanged), timestamp);
 
-    // Advance trunk
-    db.query("UPDATE trunk SET head = ? WHERE id = 1").run(changesetId);
+    // Advance main
+    db.query("UPDATE main SET head = ? WHERE id = 1").run(changesetId);
 
     // Mark workspace as merged
     db.query("UPDATE workspaces SET status = 'merged' WHERE id = ?").run(id);
@@ -300,7 +300,7 @@ export function workspaceRoutes(db: Database) {
     return c.json({
       changeset: {
         id: changesetId,
-        parent: trunk.head,
+        parent: main.head,
         snapshot: mergedSnapshotId,
         message: `Merge workspace ${id}`,
         author: { id: ws.author_id, kind: ws.author_kind },

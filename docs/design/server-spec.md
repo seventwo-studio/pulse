@@ -36,7 +36,7 @@ All durable state lives under `.pulse/`:
 | `meta/changesets.log` | Changeset records | Append-only, length-prefixed JSON |
 | `meta/snapshots.log` | Snapshot manifests | Append-only, length-prefixed JSON |
 | `meta/workspaces.log` | Workspace lifecycle events | Append-only, length-prefixed JSON |
-| `meta/trunk` | Current trunk changeset ID | Single line, UTF-8 |
+| `meta/main` | Current main changeset ID | Single line, UTF-8 |
 | `config.toml` | Server config, repo metadata | TOML |
 
 Every log file uses the same framing: `[4-byte little-endian length][payload][4-byte BLAKE3 checksum of payload]`. The checksum enables truncation detection on startup.
@@ -51,7 +51,7 @@ Rebuilt from the logs on startup:
 | Changeset index | `changesets.log` | `id -> Changeset` for history traversal |
 | Snapshot index | `snapshots.log` | `id -> Snapshot` for file lookups |
 | Workspace table | `workspaces.log` | Active workspaces, their state and scopes |
-| Trunk pointer | `meta/trunk` | Current head changeset ID |
+| Main pointer | `meta/main` | Current head changeset ID |
 
 If `chunks.index` exists, load it and verify its generation marker matches `chunks.log`. If stale or missing, rebuild by scanning `chunks.log` sequentially.
 
@@ -66,10 +66,10 @@ If `chunks.index` exists, load it and verify its generation marker matches `chun
    a. Read entries sequentially, validating checksums
    b. If the final entry has an invalid or incomplete checksum, truncate it (crash recovery)
    c. Build the corresponding in-memory index
-3. Load `meta/trunk` (empty string if repo is uninitialized)
+3. Load `meta/main` (empty string if repo is uninitialized)
 4. Load `config.toml`
 5. Start the HTTP listener (REST + WebSocket upgrade)
-6. Server is ready. Log the listening address and trunk head
+6. Server is ready. Log the listening address and main head
 
 ### Shutdown
 
@@ -160,14 +160,14 @@ Errors use the format in the [Error Model](#error-model) section.
 
 Initialize a new repository.
 
-**Precondition**: Trunk pointer is empty (repo not yet initialized).
+**Precondition**: Main pointer is empty (repo not yet initialized).
 
 **Request body**: None.
 
 **Behavior**:
 1. Create an empty snapshot (no files)
 2. Create a root changeset with `parent: null`, the empty snapshot, and `author: { type: "system", id: "pulse" }`
-3. Write the root changeset ID to `meta/trunk`
+3. Write the root changeset ID to `meta/main`
 
 **Response** `201`:
 ```json
@@ -186,12 +186,12 @@ Initialize a new repository.
 **Response** `200`:
 ```json
 {
-  "trunk": "<changeset-id>",
+  "main": "<changeset-id>",
   "active_workspaces": 3
 }
 ```
 
-Returns `trunk: null` if repo is uninitialized.
+Returns `main: null` if repo is uninitialized.
 
 ---
 
@@ -218,7 +218,7 @@ Initiate a repo transfer to another server. See [Repo Transfer Protocol](#repo-t
 
 ---
 
-### `GET /trunk`
+### `GET /main`
 
 **Response** `200`:
 ```json
@@ -237,7 +237,7 @@ Initiate a repo transfer to another server. See [Repo Transfer Protocol](#repo-t
 
 ---
 
-### `GET /trunk/log`
+### `GET /main/log`
 
 **Query parameters**:
 - `author` (optional): filter by `author.id` (exact match)
@@ -253,11 +253,11 @@ Initiate a repo transfer to another server. See [Repo Transfer Protocol](#repo-t
 }
 ```
 
-Ordered newest-first. Walk the parent chain from trunk head backwards.
+Ordered newest-first. Walk the parent chain from main head backwards.
 
 ---
 
-### `GET /trunk/snapshot`
+### `GET /main/snapshot`
 
 **Response** `200`:
 ```json
@@ -379,7 +379,7 @@ Create a new workspace.
 
 **Behavior**:
 1. Generate workspace ID: `ws-` + 4 random hex chars
-2. Set `base` to current trunk head
+2. Set `base` to current main head
 3. Set `status` to `active`
 4. Append creation event to `workspaces.log`
 5. Update workspace table in memory
@@ -503,15 +503,15 @@ Commit changes to a workspace.
 
 ### `POST /workspaces/:id/merge`
 
-Merge a workspace into trunk.
+Merge a workspace into main.
 
 **Request body**: None.
 
 **Behavior**: Execute the [Merge Algorithm](#merge-algorithm). On success:
 
-1. Update `meta/trunk` to the new changeset ID
+1. Update `meta/main` to the new changeset ID
 2. Set workspace `status` to `merged` in `workspaces.log`
-3. Broadcast `trunk.updated` to all WebSocket subscribers
+3. Broadcast `main.updated` to all WebSocket subscribers
 4. Broadcast `workspace.merged` to all WebSocket subscribers
 
 **Response** `200` (success):
@@ -519,8 +519,8 @@ Merge a workspace into trunk.
 {
   "merged": true,
   "changeset": {
-    "id": "<new-trunk-head>",
-    "parent": "<previous-trunk-head>",
+    "id": "<new-main-head>",
+    "parent": "<previous-main-head>",
     "snapshot": "<merged-snapshot-id>",
     "message": "Merge ws-a7f3: Add JWT authentication to the API",
     "files_changed": ["src/auth/jwt.rs", "src/auth/mod.rs"]
@@ -535,7 +535,7 @@ Merge a workspace into trunk.
   "conflicts": [
     {
       "file": "src/auth/mod.rs",
-      "trunk_changeset": "<hash>",
+      "main_changeset": "<hash>",
       "workspace_changeset": "<hash>"
     }
   ]
@@ -594,10 +594,10 @@ Diff two changesets at the file level.
 
 ### `GET /files/:path`
 
-Get file content at trunk head. The `:path` is the full file path, URL-encoded (e.g., `/files/src%2Fauth%2Fjwt.rs`).
+Get file content at main head. The `:path` is the full file path, URL-encoded (e.g., `/files/src%2Fauth%2Fjwt.rs`).
 
 **Query parameters**:
-- `ref` (optional): changeset ID. Defaults to trunk head.
+- `ref` (optional): changeset ID. Defaults to main head.
 
 **Behavior**:
 1. Look up snapshot for the target changeset
@@ -622,7 +622,7 @@ On connect:
 ```json
 {
   "event": "connected",
-  "trunk": "<current-trunk-head>",
+  "main": "<current-main-head>",
   "active_workspaces": 3
 }
 ```
@@ -636,7 +636,7 @@ On connect:
 
 Events are delivered as JSON text frames, one event per frame. No batching. No acknowledgment protocol — delivery is best-effort over the WebSocket.
 
-If the connection drops, the client misses events. On reconnect, the client should query the REST API to catch up (e.g., `GET /trunk`, `GET /workspaces`).
+If the connection drops, the client misses events. On reconnect, the client should query the REST API to catch up (e.g., `GET /main`, `GET /workspaces`).
 
 ### Event Reference
 
@@ -691,12 +691,12 @@ Fired when scope or file overlap is found between active workspaces.
 }
 ```
 
-#### `trunk.updated`
-Fired when a merge succeeds and trunk advances.
+#### `main.updated`
+Fired when a merge succeeds and main advances.
 ```json
 {
   "seq": 4,
-  "event": "trunk.updated",
+  "event": "main.updated",
   "changeset": {
     "id": "<hash>",
     "message": "Add JWT auth to API",
@@ -717,7 +717,7 @@ Fired when a merge fails due to conflict.
   "conflicts": [
     {
       "file": "src/auth/jwt.rs",
-      "trunk_changeset": "<hash>",
+      "main_changeset": "<hash>",
       "workspace_changeset": "<hash>"
     }
   ]
@@ -731,7 +731,7 @@ Fired after a successful merge. Workspace is no longer active.
   "seq": 6,
   "event": "workspace.merged",
   "workspace_id": "ws-a7f3",
-  "trunk_changeset": "<hash>"
+  "main_changeset": "<hash>"
 }
 ```
 
@@ -757,7 +757,7 @@ Fired when a client begins draining its offline queue through the REST API. Info
 ```
 
 #### `offline.replay.conflict`
-Fired when a replayed offline commit conflicts with current trunk.
+Fired when a replayed offline commit conflicts with current main.
 ```json
 {
   "seq": 9,
@@ -782,60 +782,60 @@ When `POST /workspaces/:id/merge` is called:
 
 ### Inputs
 - `workspace`: the workspace being merged
-- `base`: the workspace's `base` changeset (trunk head when workspace was created)
+- `base`: the workspace's `base` changeset (main head when workspace was created)
 - `workspace_head`: the last changeset in the workspace's changeset list
-- `trunk_head`: current trunk head
+- `main_head`: current main head
 
 ### Fast-Forward Case
 
-If `trunk_head == base` (trunk hasn't moved since workspace was created):
+If `main_head == base` (main hasn't moved since workspace was created):
 
 1. Build a merge changeset:
-   - `parent`: `trunk_head`
+   - `parent`: `main_head`
    - `snapshot`: `workspace_head`'s snapshot
    - `files_changed`: union of all `files_changed` across workspace's changesets
    - `message`: `"Merge {workspace.id}: {workspace.intent}"`
    - `author`: workspace's author
-2. Update trunk to the merge changeset
+2. Update main to the merge changeset
 3. Return success
 
 ### Three-Way Merge Case
 
-If `trunk_head != base` (trunk advanced while workspace was active):
+If `main_head != base` (main advanced while workspace was active):
 
 1. Resolve the three snapshots:
    - `ancestor_snapshot` = snapshot of `base`
-   - `trunk_snapshot` = snapshot of `trunk_head`
+   - `main_snapshot` = snapshot of `main_head`
    - `workspace_snapshot` = snapshot of `workspace_head`
 
 2. Compute changed file sets:
-   - `trunk_changed` = files where `trunk_snapshot[path] != ancestor_snapshot[path]` (including additions and deletions)
+   - `main_changed` = files where `main_snapshot[path] != ancestor_snapshot[path]` (including additions and deletions)
    - `workspace_changed` = files where `workspace_snapshot[path] != ancestor_snapshot[path]`
 
 3. Check for conflicts:
-   - `conflicting_files` = `trunk_changed ∩ workspace_changed`
+   - `conflicting_files` = `main_changed ∩ workspace_changed`
    - If `conflicting_files` is non-empty → **conflict**, return failure with the list
 
 4. Build merged snapshot:
    - Start from `ancestor_snapshot`
-   - Apply all changes from `trunk_snapshot` (the trunk side wins for trunk-only changes)
+   - Apply all changes from `main_snapshot` (the main side wins for main-only changes)
    - Apply all changes from `workspace_snapshot` (the workspace side wins for workspace-only changes)
    - Result: a snapshot with both sets of non-overlapping changes
 
 5. Build merge changeset:
-   - `parent`: `trunk_head`
+   - `parent`: `main_head`
    - `snapshot`: the merged snapshot
-   - `files_changed`: `trunk_changed ∪ workspace_changed`
+   - `files_changed`: `main_changed ∪ workspace_changed`
    - `message`: `"Merge {workspace.id}: {workspace.intent}"`
    - `author`: workspace's author
 
-6. Update trunk to the merge changeset
+6. Update main to the merge changeset
 7. Return success
 
 ### Conflict Handling
 
 On conflict:
-1. Do **not** update trunk
+1. Do **not** update main
 2. Do **not** change workspace status (stays `active`)
 3. Return `409` with the conflict list
 4. Broadcast `decision.needed` via WebSocket
@@ -872,11 +872,11 @@ Overlap detection is **advisory only**. It never blocks an operation. When overl
 
 ## Concurrency Model
 
-### Trunk Lock
+### Main Lock
 
-The merge operation takes an exclusive lock on trunk. Only one merge can execute at a time. This lock is held for the duration of the merge algorithm (snapshot diffing + changeset creation + trunk pointer update).
+The merge operation takes an exclusive lock on main. Only one merge can execute at a time. This lock is held for the duration of the merge algorithm (snapshot diffing + changeset creation + main pointer update).
 
-All other operations (commits to workspaces, reads, object storage) are lock-free with respect to trunk.
+All other operations (commits to workspaces, reads, object storage) are lock-free with respect to main.
 
 ### Workspace Isolation
 
@@ -898,15 +898,15 @@ When `POST /repo/transfer` is called with a target URL:
 
 ### Phase 1: Snapshot
 
-1. Pause new merges (hold trunk lock)
-2. Record current trunk head as the transfer point
+1. Pause new merges (hold main lock)
+2. Record current main head as the transfer point
 3. Resume merges
 
 ### Phase 2: Stream
 
 4. Stream `data/chunks.log` to the target server via `POST /repo/transfer/receive-chunks` (chunked HTTP transfer)
 5. Stream all meta logs (`changesets.log`, `snapshots.log`, `workspaces.log`) to the target
-6. Send trunk pointer
+6. Send main pointer
 
 ### Phase 3: Catch-up
 
@@ -915,11 +915,11 @@ When `POST /repo/transfer` is called with a target URL:
 
 ### Phase 4: Cutover
 
-9. Hold trunk lock on source
+9. Hold main lock on source
 10. Send final delta
 11. Target server confirms it has rebuilt its indices and is ready
 12. Source server responds to all new requests with `301 Moved Permanently` pointing to the target
-13. Release trunk lock. Source is now a redirect-only stub
+13. Release main lock. Source is now a redirect-only stub
 
 The target server must implement a `POST /repo/transfer/receive-chunks` and `POST /repo/transfer/receive-meta` endpoint pair that accepts streamed log data and rebuilds indices.
 

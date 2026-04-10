@@ -3,9 +3,9 @@ mod config;
 mod core;
 mod storage;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -17,7 +17,7 @@ use core::diff::diff_snapshots;
 use core::merge::{MergeEngine, MergeResult};
 use core::overlap::detect_scope_overlaps;
 use core::primitives::*;
-use core::trunk::TrunkManager;
+use core::main_ref::TrunkManager;
 use core::workspace::WorkspaceManager;
 use storage::engine::StorageEngine;
 
@@ -50,30 +50,35 @@ enum Commands {
         /// Commit message
         #[arg(long, short)]
         message: String,
-        /// Workspace ID
+        /// Workspace ID (defaults to current workspace from `pulse switch`)
         #[arg(long, short)]
-        workspace: String,
+        workspace: Option<String>,
         /// Files to commit
         files: Vec<PathBuf>,
     },
-    /// Merge a workspace into trunk
+    /// Merge a workspace into main
     Merge {
         /// Workspace ID
         workspace: String,
     },
-    /// Show trunk history
+    /// Switch working directory to a workspace or main
+    Switch {
+        /// Workspace ID or "main"
+        target: String,
+    },
+    /// Show history
     Log {
         #[arg(long)]
         author: Option<String>,
         #[arg(long, default_value = "20")]
         limit: usize,
     },
-    /// Show file contents from trunk
+    /// Show file contents
     Show {
         /// File path to retrieve
         path: String,
     },
-    /// List files in the trunk snapshot
+    /// List files in the current snapshot
     Files,
     /// Compare two snapshots or changesets
     Diff {
@@ -140,6 +145,120 @@ fn short_hash(hash: &Hash) -> String {
     hash.to_string()[..8].to_string()
 }
 
+/// Resolve the current snapshot based on config.
+///
+/// If a workspace is active (set via `pulse switch`), returns that workspace's
+/// latest snapshot. Otherwise returns the main snapshot.
+fn current_snapshot(engine: &StorageEngine) -> anyhow::Result<Snapshot> {
+    let root = find_repo_root()?;
+    let config = Config::load(&root)?;
+    match config.workspace {
+        Some(ws_id) => Ok(WorkspaceManager::snapshot(engine, &ws_id)?),
+        None => TrunkManager::snapshot(engine)?
+            .ok_or_else(|| anyhow::anyhow!("no main snapshot")),
+    }
+}
+
+/// Walk the working directory and collect all file paths relative to root,
+/// excluding the `.pulse/` directory.
+fn collect_disk_files(root: &Path) -> anyhow::Result<HashSet<String>> {
+    let mut files = HashSet::new();
+    let pulse_dir = root.join(".pulse");
+    walk_dir(root, root, &pulse_dir, &mut files)?;
+    Ok(files)
+}
+
+fn walk_dir(
+    base: &Path,
+    dir: &Path,
+    exclude: &Path,
+    files: &mut HashSet<String>,
+) -> anyhow::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.starts_with(exclude) {
+            continue;
+        }
+        if path.is_dir() {
+            walk_dir(base, &path, exclude, files)?;
+        } else {
+            let rel = path
+                .strip_prefix(base)
+                .map_err(|e| anyhow::anyhow!("strip prefix: {e}"))?;
+            files.insert(rel.to_string_lossy().to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Materialize a snapshot to the working directory.
+///
+/// Writes files that are new or changed, deletes files not in the snapshot,
+/// and cleans up empty directories.
+fn materialize_snapshot(
+    engine: &StorageEngine,
+    snapshot: &Snapshot,
+    root: &Path,
+) -> anyhow::Result<(usize, usize, usize)> {
+    let disk_files = collect_disk_files(root)?;
+
+    let mut written = 0usize;
+    let mut deleted = 0usize;
+    let mut unchanged = 0usize;
+
+    // Write files from the snapshot
+    for (path, blob_hash) in &snapshot.files {
+        let full_path = root.join(path);
+
+        // Check if file exists and matches
+        let needs_write = if full_path.exists() {
+            let disk_content = std::fs::read(&full_path)?;
+            let disk_hash = Hash::from_bytes(&disk_content);
+            disk_hash != *blob_hash
+        } else {
+            true
+        };
+
+        if needs_write {
+            if let Some(parent) = full_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let content = engine.read_file_by_path(&snapshot.id, path)?;
+            std::fs::write(&full_path, &content)?;
+            written += 1;
+        } else {
+            unchanged += 1;
+        }
+    }
+
+    // Delete files not in the snapshot
+    let snapshot_paths: HashSet<&String> = snapshot.files.keys().collect();
+    for disk_path in &disk_files {
+        if !snapshot_paths.contains(disk_path) {
+            let full_path = root.join(disk_path);
+            std::fs::remove_file(&full_path)?;
+            deleted += 1;
+
+            // Clean up empty parent directories (up to repo root)
+            let mut parent = full_path.parent();
+            while let Some(dir) = parent {
+                if dir == root {
+                    break;
+                }
+                if dir.read_dir().map(|mut d| d.next().is_none()).unwrap_or(false) {
+                    std::fs::remove_dir(dir)?;
+                } else {
+                    break;
+                }
+                parent = dir.parent();
+            }
+        }
+    }
+
+    Ok((written, deleted, unchanged))
+}
+
 /// Resolve a hash string as a changeset or snapshot.
 fn resolve_snapshot(engine: &StorageEngine, hash_str: &str) -> anyhow::Result<Snapshot> {
     let hash: Hash = hash_str
@@ -171,8 +290,8 @@ async fn auto_pull(engine: &mut StorageEngine) {
         None => return,
     };
     let client = PulseClient::new(&url);
-    let local_trunk = TrunkManager::head_id(engine).ok().flatten();
-    match client.sync_pull(local_trunk.as_ref()).await {
+    let local_main = TrunkManager::head_id(engine).ok().flatten();
+    match client.sync_pull(local_main.as_ref()).await {
         Ok(bundle) => {
             if !bundle.changesets.is_empty() {
                 let count = bundle.changesets.len();
@@ -208,12 +327,12 @@ async fn auto_push(engine: &StorageEngine) {
 
 /// Build a sync bundle from local storage (all objects).
 fn build_push_bundle(engine: &StorageEngine) -> anyhow::Result<SyncBundle> {
-    let trunk_id = TrunkManager::head_id(engine)?
+    let main_id = TrunkManager::head_id(engine)?
         .ok_or_else(|| anyhow::anyhow!("repository not initialized"))?;
 
-    // Walk the trunk chain to collect changesets in order (oldest first).
+    // Walk the main chain to collect changesets in order (oldest first).
     let mut changesets = Vec::new();
-    let mut current = Some(trunk_id);
+    let mut current = Some(main_id);
     while let Some(id) = current {
         let cs = engine.get_changeset(&id)?.clone();
         current = cs.parent;
@@ -252,7 +371,7 @@ fn build_push_bundle(engine: &StorageEngine) -> anyhow::Result<SyncBundle> {
         .collect();
 
     Ok(SyncBundle {
-        trunk: trunk_id,
+        main: main_id,
         changesets,
         snapshots,
         workspaces,
@@ -286,8 +405,8 @@ fn import_pull_bundle(engine: &mut StorageEngine, bundle: SyncBundle) -> anyhow:
         engine.store_workspace(workspace)?;
     }
 
-    // Update trunk.
-    engine.set_trunk(&bundle.trunk)?;
+    // Update main.
+    engine.set_main(&bundle.main)?;
 
     Ok(())
 }
@@ -308,6 +427,7 @@ async fn main() -> anyhow::Result<()> {
             if let Some(url) = &remote {
                 let config = Config {
                     remote: Some(url.clone()),
+                    workspace: None,
                 };
                 config.save(&cwd)?;
             }
@@ -339,7 +459,7 @@ async fn main() -> anyhow::Result<()> {
             auto_pull(&mut engine).await;
             match TrunkManager::head(&engine)? {
                 Some(cs) => {
-                    println!("trunk:       {}", short_hash(&cs.id));
+                    println!("main:        {}", short_hash(&cs.id));
                     println!("last commit: {}", cs.message);
                     println!("last author: {}", cs.author.id);
                     println!(
@@ -348,7 +468,7 @@ async fn main() -> anyhow::Result<()> {
                     );
                 }
                 None => {
-                    println!("Empty repository (no trunk).");
+                    println!("Empty repository.");
                 }
             }
             let active = WorkspaceManager::list(&engine, false);
@@ -356,6 +476,10 @@ async fn main() -> anyhow::Result<()> {
 
             let root = find_repo_root()?;
             let config = Config::load(&root)?;
+            match &config.workspace {
+                Some(ws_id) => println!("on:          {ws_id}"),
+                None => println!("on:          main"),
+            }
             match config.remote {
                 Some(url) => println!("remote:      {url}"),
                 None => println!("remote:      (none)"),
@@ -462,6 +586,20 @@ async fn main() -> anyhow::Result<()> {
             auto_pull(&mut engine).await;
             let author = current_author();
 
+            // Resolve workspace: explicit flag > current workspace from config
+            let workspace = match workspace {
+                Some(ws) => ws,
+                None => {
+                    let root = find_repo_root()?;
+                    let config = Config::load(&root)?;
+                    config.workspace.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "no workspace specified. Use -w <id> or switch to a workspace with `pulse switch <id>`"
+                        )
+                    })?
+                }
+            };
+
             let file_data: Vec<(String, Vec<u8>)> = files
                 .iter()
                 .map(|path| {
@@ -496,7 +634,7 @@ async fn main() -> anyhow::Result<()> {
             match result {
                 MergeResult::Success { changeset } => {
                     println!(
-                        "Merged into trunk. Changeset: {}",
+                        "Merged into main. Changeset: {}",
                         short_hash(&changeset.id)
                     );
                     if !changeset.files_changed.is_empty() {
@@ -505,7 +643,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 MergeResult::Conflict {
                     conflicting_files,
-                    trunk_snapshot,
+                    main_snapshot,
                     workspace_snapshot,
                 } => {
                     println!("Merge conflict!");
@@ -513,8 +651,8 @@ async fn main() -> anyhow::Result<()> {
                         println!("  conflict: {f}");
                     }
                     println!(
-                        "  trunk snapshot:     {}",
-                        short_hash(&trunk_snapshot)
+                        "  main snapshot:      {}",
+                        short_hash(&main_snapshot)
                     );
                     println!(
                         "  workspace snapshot: {}",
@@ -528,8 +666,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Show { path } => {
             let mut engine = open_storage()?;
             auto_pull(&mut engine).await;
-            let snap = TrunkManager::snapshot(&engine)?
-                .ok_or_else(|| anyhow::anyhow!("no trunk snapshot"))?;
+            let snap = current_snapshot(&engine)?;
             let bytes = engine.read_file_by_path(&snap.id, &path)?;
             let stdout = std::io::stdout();
             let mut handle = stdout.lock();
@@ -539,15 +676,47 @@ async fn main() -> anyhow::Result<()> {
         Commands::Files => {
             let mut engine = open_storage()?;
             auto_pull(&mut engine).await;
-            let snap = TrunkManager::snapshot(&engine)?
-                .ok_or_else(|| anyhow::anyhow!("no trunk snapshot"))?;
+            let snap = current_snapshot(&engine)?;
             if snap.files.is_empty() {
-                println!("No files in trunk.");
+                println!("No files.");
             } else {
                 for (path, hash) in &snap.files {
                     println!("{}  {}", short_hash(hash), path);
                 }
             }
+        }
+
+        Commands::Switch { target } => {
+            let mut engine = open_storage()?;
+            auto_pull(&mut engine).await;
+            let root = find_repo_root()?;
+            let mut config = Config::load(&root)?;
+
+            let (snapshot, label) = if target == "main" {
+                let snap = TrunkManager::snapshot(&engine)?
+                    .ok_or_else(|| anyhow::anyhow!("no main snapshot"))?;
+                config.workspace = None;
+                (snap, "main".to_string())
+            } else {
+                // Verify workspace exists and is active
+                let ws = WorkspaceManager::get(&engine, &target)?;
+                if ws.status != WorkspaceStatus::Active {
+                    anyhow::bail!("workspace {} is not active ({:?})", target, ws.status);
+                }
+                let snap = WorkspaceManager::snapshot(&engine, &target)?;
+                config.workspace = Some(target.clone());
+                (snap, format!("workspace {target}"))
+            };
+
+            let (written, deleted, unchanged) =
+                materialize_snapshot(&engine, &snapshot, &root)?;
+            config.save(&root)?;
+
+            println!("Switched to {label}");
+            println!(
+                "  written: {written}, deleted: {deleted}, unchanged: {unchanged}"
+            );
+            println!("  files:   {}", snapshot.files.len());
         }
 
         Commands::Diff { a, b } => {

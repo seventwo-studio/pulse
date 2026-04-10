@@ -1,21 +1,21 @@
 ---
 title: pulse merge
-description: Merge a workspace into trunk.
+description: Merge a workspace into main.
 ---
 
 ```bash
 pulse merge <workspace>
 ```
 
-Close a workspace by merging its changes into trunk.
+Close a workspace by merging its changes into main.
 
 ## Merge strategies
 
-**Fast-forward** — if trunk hasn't moved since the workspace was created, the workspace's latest snapshot becomes the new trunk head directly.
+**Fast-forward** — if main hasn't moved since the workspace was created, the workspace's latest snapshot becomes the new main head directly.
 
-**Three-way merge** — if trunk has advanced, Pulse compares the ancestor snapshot (workspace base), trunk snapshot, and workspace snapshot. Non-conflicting changes from both sides are combined.
+**Three-way merge** — if main has advanced, Pulse compares the ancestor snapshot (workspace base), main snapshot, and workspace snapshot. Non-conflicting changes from both sides are combined.
 
-**Conflict** — if both sides modified the same file, Pulse reports the conflict. Trunk is not modified and the workspace stays active.
+**Conflict** — if both sides modified the same file, Pulse reports the conflict. Main is not modified and the workspace stays active.
 
 ## Example: success
 
@@ -24,7 +24,7 @@ pulse merge ws-c348
 ```
 
 ```
-Merged into trunk. Changeset: 68fe576d
+Merged into main. Changeset: 68fe576d
   files: src/auth.rs, src/middleware.rs
 ```
 
@@ -37,7 +37,7 @@ pulse merge ws-a1b2
 ```
 Merge conflict!
   conflict: src/shared.rs
-  trunk snapshot:     a1b2c3d4
+  main snapshot:      a1b2c3d4
   workspace snapshot: e5f6a7b8
 ```
 

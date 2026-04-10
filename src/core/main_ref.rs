@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use crate::core::primitives::{Changeset, Hash, Snapshot};
 use crate::storage::engine::{StorageEngine, StorageError};
 
-/// Manages the trunk — the single linear history reference.
+/// Manages the main — the single linear history reference.
 ///
 /// All methods are stateless associated functions operating on a borrowed
 /// `StorageEngine`. The server layer is responsible for synchronisation
@@ -11,29 +11,29 @@ use crate::storage::engine::{StorageEngine, StorageError};
 pub struct TrunkManager;
 
 impl TrunkManager {
-    /// Get the current trunk head changeset, if any.
-    /// Returns `None` if the repo was just initialised and trunk hasn't been set yet.
+    /// Get the current main head changeset, if any.
+    /// Returns `None` if the repo was just initialised and main hasn't been set yet.
     pub fn head(storage: &StorageEngine) -> Result<Option<Changeset>, StorageError> {
-        match storage.get_trunk()? {
+        match storage.get_main()? {
             Some(id) => Ok(Some(storage.get_changeset(&id)?.clone())),
             None => Ok(None),
         }
     }
 
-    /// Get the current trunk head hash, if any.
+    /// Get the current main head hash, if any.
     pub fn head_id(storage: &StorageEngine) -> Result<Option<Hash>, StorageError> {
-        storage.get_trunk()
+        storage.get_main()
     }
 
-    /// Advance trunk to a new changeset.
+    /// Advance main to a new changeset.
     /// Caller is responsible for holding any necessary locks.
     pub fn advance(storage: &mut StorageEngine, changeset_id: &Hash) -> Result<(), StorageError> {
         // Verify the changeset exists before moving the pointer.
         storage.get_changeset(changeset_id)?;
-        storage.set_trunk(changeset_id)
+        storage.set_main(changeset_id)
     }
 
-    /// Walk the parent chain from trunk head backwards, returning changesets
+    /// Walk the parent chain from main head backwards, returning changesets
     /// in reverse chronological order.
     ///
     /// - `limit`: maximum number of changesets to return.
@@ -46,7 +46,7 @@ impl TrunkManager {
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<Changeset>, StorageError> {
         let mut result = Vec::new();
-        let mut current = match storage.get_trunk()? {
+        let mut current = match storage.get_main()? {
             Some(id) => id,
             None => return Ok(result),
         };
@@ -84,7 +84,7 @@ impl TrunkManager {
         Ok(result)
     }
 
-    /// Get the current trunk snapshot, if any.
+    /// Get the current main snapshot, if any.
     pub fn snapshot(storage: &StorageEngine) -> Result<Option<Snapshot>, StorageError> {
         match Self::head(storage)? {
             Some(cs) => Ok(Some(storage.get_snapshot(&cs.snapshot)?.clone())),
@@ -93,13 +93,13 @@ impl TrunkManager {
     }
 
     /// Initialise the repository: create an empty snapshot and a root changeset,
-    /// then set the trunk pointer.
+    /// then set the main pointer.
     pub fn init_repo(storage: &mut StorageEngine) -> Result<Changeset, StorageError> {
         let snapshot = Snapshot::empty();
         storage.store_snapshot(&snapshot)?;
         let changeset = Changeset::root(snapshot.id);
         storage.store_changeset(&changeset)?;
-        storage.set_trunk(&changeset.id)?;
+        storage.set_main(&changeset.id)?;
         Ok(changeset)
     }
 }

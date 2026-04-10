@@ -110,7 +110,7 @@ Note: changeset and snapshot **IDs** are still computed by hashing canonical JSO
     changesets.log        # append-only log of binary-encoded changeset records
     snapshots.log         # append-only log of binary-encoded snapshot manifests
     workspaces.log        # append-only log of binary-encoded workspace lifecycle events
-    trunk                 # current trunk pointer (single changeset ID)
+    main                  # current main pointer (single changeset ID)
   config.toml             # server config, repo metadata
 ```
 

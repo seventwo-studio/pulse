@@ -28,7 +28,7 @@ interface SyncWorkspace {
 }
 
 interface PushBody {
-  trunk: string;
+  main: string;
   changesets: SyncChangeset[];
   snapshots: SyncSnapshot[];
   workspaces: SyncWorkspace[];
@@ -36,7 +36,7 @@ interface PushBody {
 }
 
 interface PullBody {
-  have_trunk: string | null;
+  have_main: string | null;
 }
 
 /**
@@ -153,9 +153,9 @@ export function syncRoutes(db: Database) {
         }
       }
 
-      // 5. Update trunk
-      db.query("INSERT OR REPLACE INTO trunk (id, head) VALUES (1, ?)").run(
-        body.trunk
+      // 5. Update main
+      db.query("INSERT OR REPLACE INTO main (id, head) VALUES (1, ?)").run(
+        body.main
       );
 
       db.exec("COMMIT");
@@ -166,7 +166,7 @@ export function syncRoutes(db: Database) {
       throw e;
     }
 
-    return c.json({ trunk: body.trunk });
+    return c.json({ main: body.main });
   });
 
   // -----------------------------------------------------------------------
@@ -174,13 +174,13 @@ export function syncRoutes(db: Database) {
   // -----------------------------------------------------------------------
   app.post("/sync/pull", async (c) => {
     const body = (await c.req.json()) as PullBody;
-    const haveTrunk = body.have_trunk;
+    const haveMain = body.have_main;
 
-    const trunkRow = db
-      .query("SELECT head FROM trunk WHERE id = 1")
+    const mainRow = db
+      .query("SELECT head FROM main WHERE id = 1")
       .get() as { head: string | null } | null;
 
-    if (!trunkRow?.head) {
+    if (!mainRow?.head) {
       return c.json(
         {
           error: {
@@ -193,14 +193,14 @@ export function syncRoutes(db: Database) {
       );
     }
 
-    const serverTrunk = trunkRow.head;
+    const serverMain = mainRow.head;
 
-    // Walk the changeset chain from trunk head to the client's known trunk.
+    // Walk the changeset chain from main head to the client's known main.
     const changesets: SyncChangeset[] = [];
     const snapshotIds = new Set<string>();
-    let current: string | null = serverTrunk;
+    let current: string | null = serverMain;
 
-    while (current && current !== haveTrunk) {
+    while (current && current !== haveMain) {
       const row = db
         .query("SELECT * FROM changesets WHERE id = ?")
         .get(current) as any;
@@ -278,7 +278,7 @@ export function syncRoutes(db: Database) {
     });
 
     return c.json({
-      trunk: serverTrunk,
+      main: serverMain,
       changesets,
       snapshots,
       workspaces,

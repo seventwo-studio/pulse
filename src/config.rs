@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote: Option<String>,
+    /// Currently active workspace id. `None` means main.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
 }
 
 impl Config {
